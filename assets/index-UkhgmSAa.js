@@ -15359,6 +15359,47 @@ const ToastProvider = ({ children }) => {
     !!message && /* @__PURE__ */ jsxRuntimeExports.jsx(Portal, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(Toast, { message, type }) })
   ] });
 };
+const Description$1 = newStyled.div`
+  font-weight: 500;
+  font-size: 16px;
+`;
+const Description = ({ children }) => {
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(Description$1, { children });
+};
+const EmptyFallback$1 = newStyled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 50px;
+  justify-content: center;
+  align-items: center;
+  flex-grow: 1;
+`;
+const EmptyFallbackImage = newStyled.img`
+  width: 300px;
+  height: 200px;
+`;
+const EmptyCart = "/react-shopping-cart/planet-empty-cart.svg";
+const EmptyFallback = () => {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(EmptyFallback$1, { children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx(EmptyFallbackImage, { src: EmptyCart, alt: "empty-cart" }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(Description, { children: "장바구니에 담은 상품이 없습니다." })
+  ] });
+};
+const Header$1 = newStyled.div`
+  background-color: #000;
+  width: 100%;
+  height: 64px;
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+`;
+const Title$1 = newStyled.div`
+  font-weight: 700;
+  font-size: 28px;
+`;
+const Title = ({ children }) => {
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(Title$1, { children });
+};
 const useCart = () => {
   const context = reactExports.useContext(CartContext);
   if (!context) {
@@ -15379,13 +15420,6 @@ const Checkbox$1 = newStyled.div`
 `;
 const Checkbox = ({ checked, onClick, ...props }) => {
   return /* @__PURE__ */ jsxRuntimeExports.jsx(Checkbox$1, { onClick, ...props, children: checked ? /* @__PURE__ */ jsxRuntimeExports.jsx("img", { src: FilledCheckbox, alt: "filled-checkbox" }) : /* @__PURE__ */ jsxRuntimeExports.jsx("img", { src: EmptyCheckbox, alt: "empty-checkbox" }) });
-};
-const Description$1 = newStyled.div`
-  font-weight: 500;
-  font-size: 16px;
-`;
-const Description = ({ children }) => {
-  return /* @__PURE__ */ jsxRuntimeExports.jsx(Description$1, { children });
 };
 const AllSelector$1 = newStyled.div`
   display: flex;
@@ -15605,14 +15639,6 @@ const FooterButton = newStyled.button`
     cursor: default;
   }
 `;
-const Header$1 = newStyled.div`
-  background-color: #000;
-  width: 100%;
-  height: 64px;
-  padding: 0 24px;
-  display: flex;
-  align-items: center;
-`;
 const PriceInfo$1 = newStyled.div`
   width: 100%;
   display: flex;
@@ -15636,13 +15662,6 @@ const PriceInfo = ({ label, price }) => {
       "원"
     ] })
   ] });
-};
-const Title$1 = newStyled.div`
-  font-weight: 700;
-  font-size: 28px;
-`;
-const Title = ({ children }) => {
-  return /* @__PURE__ */ jsxRuntimeExports.jsx(Title$1, { children });
 };
 const useToast = () => {
   const context = reactExports.useContext(ToastContext);
@@ -15703,25 +15722,6 @@ const PriceInfoWrapper = newStyled.div`
   padding-top: 12px;
 `;
 const InfoIcon = "/react-shopping-cart/info.svg";
-const EmptyFallback$1 = newStyled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 50px;
-  justify-content: center;
-  align-items: center;
-  flex-grow: 1;
-`;
-const EmptyFallbackImage = newStyled.img`
-  width: 300px;
-  height: 200px;
-`;
-const EmptyCart = "/react-shopping-cart/planet-empty-cart.svg";
-const EmptyFallback = () => {
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs(EmptyFallback$1, { children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsx(EmptyFallbackImage, { src: EmptyCart, alt: "empty-cart" }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx(Description, { children: "장바구니에 담은 상품이 없습니다." })
-  ] });
-};
 const CartPage = () => {
   const {
     cartItemsData,
@@ -15741,7 +15741,7 @@ const CartPage = () => {
     navigate("/order");
   };
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsx(Header$1, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(Logo, { href: "/", children: "SHOP" }) }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(Header$1, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(Logo, { href: CLIENT_BASE_PATH, children: "SHOP" }) }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs(Main$1, { children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx(Title, { children: "장바구니" }),
       cartItemCount > 0 ? /* @__PURE__ */ jsxRuntimeExports.jsxs(ContentContainer, { children: [
@@ -15874,7 +15874,7 @@ const router = createBrowserRouter(
   }
 );
 async function enableMocking() {
-  const { worker } = await __vitePreload(() => import("./browser-DCPZE3tn.js"), true ? [] : void 0);
+  const { worker } = await __vitePreload(() => import("./browser-Be1G3URb.js"), true ? [] : void 0);
   return worker.start({
     serviceWorker: {
       url: `${window.location.origin}${CLIENT_BASE_PATH}mockServiceWorker.js`,
