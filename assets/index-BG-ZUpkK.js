@@ -64,55 +64,6 @@ function _mergeNamespaces(n2, m2) {
     fetch(link.href, fetchOpts);
   }
 })();
-const scriptRel = "modulepreload";
-const assetsURL = function(dep) {
-  return "/react-shopping-cart/" + dep;
-};
-const seen = {};
-const __vitePreload = function preload(baseModule, deps, importerUrl) {
-  let promise = Promise.resolve();
-  if (deps && deps.length > 0) {
-    document.getElementsByTagName("link");
-    const cspNonceMeta = document.querySelector("meta[property=csp-nonce]");
-    const cspNonce = (cspNonceMeta == null ? void 0 : cspNonceMeta.nonce) || (cspNonceMeta == null ? void 0 : cspNonceMeta.getAttribute("nonce"));
-    promise = Promise.all(deps.map((dep) => {
-      dep = assetsURL(dep);
-      if (dep in seen)
-        return;
-      seen[dep] = true;
-      const isCss = dep.endsWith(".css");
-      const cssSelector = isCss ? '[rel="stylesheet"]' : "";
-      if (document.querySelector(`link[href="${dep}"]${cssSelector}`)) {
-        return;
-      }
-      const link = document.createElement("link");
-      link.rel = isCss ? "stylesheet" : scriptRel;
-      if (!isCss) {
-        link.as = "script";
-        link.crossOrigin = "";
-      }
-      link.href = dep;
-      if (cspNonce) {
-        link.setAttribute("nonce", cspNonce);
-      }
-      document.head.appendChild(link);
-      if (isCss) {
-        return new Promise((res, rej) => {
-          link.addEventListener("load", res);
-          link.addEventListener("error", () => rej(new Error(`Unable to preload CSS for ${dep}`)));
-        });
-      }
-    }));
-  }
-  return promise.then(() => baseModule()).catch((err) => {
-    const e2 = new Event("vite:preloadError", { cancelable: true });
-    e2.payload = err;
-    window.dispatchEvent(e2);
-    if (!e2.defaultPrevented) {
-      throw err;
-    }
-  });
-};
 function getDefaultExportFromCjs(x2) {
   return x2 && x2.__esModule && Object.prototype.hasOwnProperty.call(x2, "default") ? x2["default"] : x2;
 }
@@ -7662,6 +7613,8 @@ var m$1 = reactDomExports;
   client.createRoot = m$1.createRoot;
   client.hydrateRoot = m$1.hydrateRoot;
 }
+const API_BASE_URL = "http://techcourse-lv2-alb-974870821.ap-northeast-2.elb.amazonaws.com";
+const CLIENT_BASE_PATH = "/react-shopping-cart/";
 var dist = {};
 Object.defineProperty(dist, "__esModule", { value: true });
 dist.parse = parse$1;
@@ -13471,13 +13424,6 @@ function useViewTransitionState(to, opts = {}) {
 function RouterProvider2(props) {
   return /* @__PURE__ */ reactExports.createElement(RouterProvider, { flushSync: reactDomExports.flushSync, ...props });
 }
-const getBaseUrl = () => {
-  {
-    return "https://techcourse-lv2-alb-974870821.ap-northeast-2.elb.amazonaws.com";
-  }
-};
-const API_BASE_URL = getBaseUrl();
-const CLIENT_BASE_PATH = "/react-shopping-cart/";
 function _extends() {
   _extends = Object.assign ? Object.assign.bind() : function(target) {
     for (var i = 1; i < arguments.length; i++) {
@@ -15111,12 +15057,12 @@ class HTTPClient {
 const httpClient = new HTTPClient(API_BASE_URL, API_KEY);
 const ERROR_MESSAGE$2 = "징바구니를 가져오는 데 실패했습니다.";
 const getCartItems = async () => {
-  const url = new URLSearchParams({
+  const params = new URLSearchParams({
     page: "0",
     size: "50",
     sort: "asc"
   });
-  const response = await httpClient.get(`/cart-items?${url.toString()}`);
+  const response = await httpClient.get(`/cart-items?${params.toString()}`);
   if (!response.ok)
     throw new Error(ERROR_MESSAGE$2);
   const data = await response.json();
@@ -15128,16 +15074,14 @@ const patchCartItem = async ({ cartId, quantity }) => {
     id: cartId,
     quantity
   });
-  if (!response.ok) {
+  if (!response.ok)
     throw new Error(ERROR_MESSAGE$1);
-  }
 };
 const ERROR_MESSAGE = "장바구니에 상품을 제거하던 중 에러가 발생했습니다.";
 const deleteCartItem = async (id2) => {
   const response = await httpClient.delete(`/cart-items/${id2}`);
-  if (!response.ok) {
+  if (!response.ok)
     throw new Error(ERROR_MESSAGE);
-  }
 };
 const INITIAL_CHECKED = true;
 const FREE_SHIPPING_THRESHOLD = 1e5;
@@ -15873,21 +15817,14 @@ const router = createBrowserRouter(
     basename: CLIENT_BASE_PATH
   }
 );
+const App = () => {
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(RouterProvider2, { router });
+};
 async function enableMocking() {
-  const { worker } = await __vitePreload(() => import("./browser-Be1G3URb.js"), true ? [] : void 0);
-  return worker.start({
-    serviceWorker: {
-      url: `${window.location.origin}${CLIENT_BASE_PATH}mockServiceWorker.js`,
-      options: { scope: CLIENT_BASE_PATH }
-    },
-    onUnhandledRequest: "bypass"
-  });
+  return Promise.resolve();
 }
 enableMocking().then(
   () => client.createRoot(document.getElementById("root")).render(
-    /* @__PURE__ */ jsxRuntimeExports.jsx(React.StrictMode, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(RouterProvider2, { router }) })
+    /* @__PURE__ */ jsxRuntimeExports.jsx(React.StrictMode, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(App, {}) })
   )
 );
-export {
-  API_BASE_URL as A
-};
