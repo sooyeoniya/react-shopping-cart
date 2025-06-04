@@ -15060,6 +15060,80 @@ const ROUTES = {
   HOME: "/",
   ORDER: "/order"
 };
+const FREE_SHIPPING_THRESHOLD = 1e5;
+const DEFAULT_SHIPPING_FEE = 3e3;
+const useCartCalculation = (cartItemsData, checkedItemsId) => {
+  const { orderQuantity, orderPrice } = reactExports.useMemo(() => {
+    const checkedItemsSet = new Set(checkedItemsId);
+    return cartItemsData.filter(({ id: id2 }) => checkedItemsSet.has(id2)).reduce(
+      (acc, item) => ({
+        orderQuantity: acc.orderQuantity + item.quantity,
+        orderPrice: acc.orderPrice + item.quantity * item.product.price
+      }),
+      { orderQuantity: 0, orderPrice: 0 }
+    );
+  }, [cartItemsData, checkedItemsId]);
+  const shippingFee = reactExports.useMemo(() => {
+    if (orderPrice === 0)
+      return 0;
+    return orderPrice >= FREE_SHIPPING_THRESHOLD ? 0 : DEFAULT_SHIPPING_FEE;
+  }, [orderPrice]);
+  const totalPrice = orderPrice + shippingFee;
+  return {
+    orderQuantity,
+    orderPrice,
+    shippingFee,
+    totalPrice
+  };
+};
+const INITIAL_CHECKED = true;
+const useCartCheck = (cartItemsData) => {
+  const [cartItemsCheckData, setCartItemsCheckData] = reactExports.useState([]);
+  const [allChecked, setAllChecked] = reactExports.useState(INITIAL_CHECKED);
+  const isCheckDataInitialized = reactExports.useRef(false);
+  reactExports.useEffect(() => {
+    if (cartItemsData.length > 0 && !isCheckDataInitialized.current) {
+      const data = cartItemsData.map(({ id: id2 }) => ({
+        id: id2,
+        checked: INITIAL_CHECKED
+      }));
+      setCartItemsCheckData(data);
+      isCheckDataInitialized.current = true;
+    }
+  }, [cartItemsData]);
+  reactExports.useEffect(() => {
+    setCartItemsCheckData(
+      (prev2) => prev2.filter(({ id: id2 }) => cartItemsData.some((item) => item.id === id2))
+    );
+  }, [cartItemsData]);
+  const getItemChecked = (cartId) => {
+    var _a;
+    return ((_a = cartItemsCheckData.find(({ id: id2 }) => id2 === cartId)) == null ? void 0 : _a.checked) ?? false;
+  };
+  const toggleAllChecked = () => {
+    setAllChecked((prev2) => !prev2);
+    setCartItemsCheckData((prev2) => {
+      return prev2.map((checkData) => ({
+        ...checkData,
+        checked: !allChecked
+      }));
+    });
+  };
+  const toggleItemChecked = (cartId) => {
+    setCartItemsCheckData(
+      (prev2) => prev2.map(
+        (item) => item.id === cartId ? { ...item, checked: !item.checked } : item
+      )
+    );
+  };
+  return {
+    cartItemsCheckData,
+    allChecked,
+    getItemChecked,
+    toggleAllChecked,
+    toggleItemChecked
+  };
+};
 const API_KEY = "c29veWVvbml5YTpwYXNzd29yZA==";
 class HTTPClient {
   constructor(baseUrl, apiKey) {
@@ -15108,7 +15182,13 @@ class HTTPClient {
   }
 }
 const httpClient = new HTTPClient(API_BASE_URL, API_KEY);
-const ERROR_MESSAGE$2 = "징바구니를 가져오는 데 실패했습니다.";
+const ERROR_MESSAGE$2 = "장바구니에 상품을 제거하던 중 에러가 발생했습니다.";
+const deleteCartItem = async (id2) => {
+  const response = await httpClient.delete(`/cart-items/${id2}`);
+  if (!response.ok)
+    throw new Error(ERROR_MESSAGE$2);
+};
+const ERROR_MESSAGE$1 = "징바구니를 가져오는 데 실패했습니다.";
 const getCartItems = async () => {
   const params = new URLSearchParams({
     page: "0",
@@ -15117,22 +15197,16 @@ const getCartItems = async () => {
   });
   const response = await httpClient.get(`/cart-items?${params.toString()}`);
   if (!response.ok)
-    throw new Error(ERROR_MESSAGE$2);
+    throw new Error(ERROR_MESSAGE$1);
   const data = await response.json();
   return data.content;
 };
-const ERROR_MESSAGE$1 = "장바구니에서 상품의 수량을 조절하던 중 에러가 발생했습니다.";
+const ERROR_MESSAGE = "장바구니에서 상품의 수량을 조절하던 중 에러가 발생했습니다.";
 const patchCartItem = async ({ cartId, quantity }) => {
   const response = await httpClient.patch(`/cart-items/${cartId}`, {
     id: cartId,
     quantity
   });
-  if (!response.ok)
-    throw new Error(ERROR_MESSAGE$1);
-};
-const ERROR_MESSAGE = "장바구니에 상품을 제거하던 중 에러가 발생했습니다.";
-const deleteCartItem = async (id2) => {
-  const response = await httpClient.delete(`/cart-items/${id2}`);
   if (!response.ok)
     throw new Error(ERROR_MESSAGE);
 };
@@ -15217,27 +15291,20 @@ const useToast = () => {
   }
   return context;
 };
-const INITIAL_CHECKED = true;
-const FREE_SHIPPING_THRESHOLD = 1e5;
-const DEFAULT_SHIPPING_FEE = 3e3;
-const CartContext = reactExports.createContext(null);
-const CartProvider = ({ children }) => {
-  const [cartItemsData, setCartItemsData] = reactExports.useState([]);
-  const [cartItemsCheckData, setCartItemsCheckData] = reactExports.useState([]);
-  const [allChecked, setAllChecked] = reactExports.useState(INITIAL_CHECKED);
-  const isCheckDataInitialized = reactExports.useRef(false);
-  const [errorMessage, setErrorMessage] = reactExports.useState("");
+const useErrorHandler = () => {
   const { showToast } = useToast();
-  reactExports.useEffect(() => {
-    showToast({ message: errorMessage, type: TOAST_TYPES.ERROR });
-  }, [errorMessage, showToast]);
-  const handleError = reactExports.useCallback((error) => {
-    if (error instanceof Error) {
-      setErrorMessage(error.message);
-    } else {
-      setErrorMessage("알 수 없는 오류가 발생했습니다.");
-    }
-  }, []);
+  const handleError = reactExports.useCallback(
+    (error) => {
+      const message = error instanceof Error ? error.message : "알 수 없는 오류";
+      showToast({ message, type: TOAST_TYPES.ERROR });
+    },
+    [showToast]
+  );
+  return { handleError };
+};
+const useCartData = () => {
+  const [cartItemsData, setCartItemsData] = reactExports.useState([]);
+  const { handleError } = useErrorHandler();
   const fetchData = reactExports.useCallback(async () => {
     try {
       setCartItemsData(await getCartItems());
@@ -15248,16 +15315,6 @@ const CartProvider = ({ children }) => {
   reactExports.useEffect(() => {
     fetchData();
   }, [fetchData]);
-  reactExports.useEffect(() => {
-    if (cartItemsData.length > 0 && !isCheckDataInitialized.current) {
-      const data = cartItemsData.map(({ id: id2 }) => ({
-        id: id2,
-        checked: INITIAL_CHECKED
-      }));
-      setCartItemsCheckData(data);
-      isCheckDataInitialized.current = true;
-    }
-  }, [cartItemsData]);
   const deleteItem = reactExports.useCallback(
     async (cartId) => {
       try {
@@ -15266,16 +15323,15 @@ const CartProvider = ({ children }) => {
         handleError(error);
       }
       fetchData();
-      setCartItemsCheckData((prev2) => prev2.filter(({ id: id2 }) => id2 !== cartId));
     },
     [fetchData, handleError]
   );
-  const increaseItemQuantity = reactExports.useCallback(
-    async (cartId, currentQuantity) => {
+  const updateItemQuantity = reactExports.useCallback(
+    async (cartId, newQuantity) => {
       try {
         await patchCartItem({
           cartId,
-          quantity: currentQuantity + 1
+          quantity: newQuantity
         });
       } catch (error) {
         handleError(error);
@@ -15284,62 +15340,26 @@ const CartProvider = ({ children }) => {
     },
     [fetchData, handleError]
   );
-  const decreaseItemQuantity = reactExports.useCallback(
-    async (cartId, currentQuantity) => {
-      try {
-        await patchCartItem({
-          cartId,
-          quantity: currentQuantity - 1
-        });
-      } catch (error) {
-        handleError(error);
-      }
-      fetchData();
-    },
-    [fetchData, handleError]
-  );
-  const toggleAllChecked = () => {
-    setAllChecked((prev2) => !prev2);
-    setCartItemsCheckData((prev2) => {
-      return prev2.map((checkData) => ({
-        ...checkData,
-        checked: !allChecked
-      }));
-    });
+  return {
+    cartItemsData,
+    setCartItemsData,
+    fetchData,
+    deleteItem,
+    updateItemQuantity
   };
-  const hasCheckedItem = () => {
-    return cartItemsCheckData.some(({ checked }) => checked);
-  };
-  const getItemChecked = (cartId) => {
-    var _a;
-    return ((_a = cartItemsCheckData.find(({ id: id2 }) => id2 === cartId)) == null ? void 0 : _a.checked) ?? false;
-  };
-  const toggleItemChecked = (cartId) => {
-    setCartItemsCheckData(
-      (prev2) => prev2.map(
-        (item) => item.id === cartId ? { ...item, checked: !item.checked } : item
-      )
-    );
-  };
+};
+const CartContext = reactExports.createContext(null);
+const CartProvider = ({ children }) => {
+  const { cartItemsData, deleteItem, updateItemQuantity } = useCartData();
+  const {
+    cartItemsCheckData,
+    allChecked,
+    getItemChecked,
+    toggleAllChecked,
+    toggleItemChecked
+  } = useCartCheck(cartItemsData);
   const checkedItemsId = cartItemsCheckData.filter(({ checked }) => checked).map(({ id: id2 }) => id2);
-  const calculateOrderQuantity = () => {
-    return cartItemsData.filter(({ id: id2 }) => checkedItemsId.includes(id2)).reduce(
-      (orderQuantity, cartItem) => orderQuantity + cartItem.quantity,
-      0
-    );
-  };
-  const calculateOrderPrice = () => {
-    return cartItemsData.filter(({ id: id2 }) => checkedItemsId.includes(id2)).reduce(
-      (orderPrice, cartItem) => orderPrice + cartItem.quantity * cartItem.product.price,
-      0
-    );
-  };
-  const calculateShippingFee = () => {
-    const orderPrice = calculateOrderPrice();
-    if (orderPrice === 0)
-      return 0;
-    return orderPrice >= FREE_SHIPPING_THRESHOLD ? 0 : DEFAULT_SHIPPING_FEE;
-  };
+  const { orderQuantity, orderPrice, shippingFee, totalPrice } = useCartCalculation(cartItemsData, checkedItemsId);
   return /* @__PURE__ */ jsxRuntimeExports.jsx(
     CartContext.Provider,
     {
@@ -15347,20 +15367,19 @@ const CartProvider = ({ children }) => {
         cartItemsData,
         cartItemsCheckData,
         deleteItem,
-        increaseItemQuantity,
-        decreaseItemQuantity,
+        increaseItemQuantity: (cartId, currentQuantity) => updateItemQuantity(cartId, currentQuantity + 1),
+        decreaseItemQuantity: (cartId, currentQuantity) => updateItemQuantity(cartId, currentQuantity - 1),
         allChecked,
         toggleAllChecked,
-        hasCheckedItem,
+        hasCheckedItem: checkedItemsId.length > 0,
         getItemChecked,
         toggleItemChecked,
         cartItemCount: cartItemsData.length,
         orderItemCount: checkedItemsId.length,
-        orderQuantity: calculateOrderQuantity(),
-        orderPrice: calculateOrderPrice(),
-        shippingFee: calculateShippingFee(),
-        totalPrice: calculateOrderPrice() + calculateShippingFee(),
-        errorMessage
+        orderQuantity,
+        orderPrice,
+        shippingFee,
+        totalPrice
       },
       children
     }
@@ -15767,7 +15786,7 @@ const CartPage = () => {
     /* @__PURE__ */ jsxRuntimeExports.jsx(
       FooterButton,
       {
-        disabled: cartItemCount === 0 || !hasCheckedItem(),
+        disabled: cartItemCount === 0 || !hasCheckedItem,
         onClick: navigateToOrderPage,
         tabIndex: 0,
         children: "주문 확인"
@@ -15875,7 +15894,7 @@ const App = () => {
 };
 async function enableMocking() {
   {
-    const { worker } = await __vitePreload(() => import("./browser-C0grwGuO.js"), true ? [] : void 0);
+    const { worker } = await __vitePreload(() => import("./browser-pQXgs3md.js"), true ? [] : void 0);
     return worker.start({
       serviceWorker: {
         url: `${window.location.origin}${CLIENT_BASE_PATH}mockServiceWorker.js`,
