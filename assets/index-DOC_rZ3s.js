@@ -15056,6 +15056,10 @@ function MobileLayout({ children }) {
     /* @__PURE__ */ jsxRuntimeExports.jsx(SidePanel, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(SidePanelText, { children: "메이토 & 니야" }) })
   ] });
 }
+const ROUTES = {
+  HOME: "/",
+  ORDER: "/order"
+};
 const API_KEY = "c29veWVvbml5YTpwYXNzd29yZA==";
 class HTTPClient {
   constructor(baseUrl, apiKey) {
@@ -15132,152 +15136,6 @@ const deleteCartItem = async (id2) => {
   if (!response.ok)
     throw new Error(ERROR_MESSAGE);
 };
-const INITIAL_CHECKED = true;
-const FREE_SHIPPING_THRESHOLD = 1e5;
-const DEFAULT_SHIPPING_FEE = 3e3;
-const CartContext = reactExports.createContext(null);
-const CartProvider = ({ children }) => {
-  const [cartItemsData, setCartItemsData] = reactExports.useState([]);
-  const [cartItemsCheckData, setCartItemsCheckData] = reactExports.useState([]);
-  const [allChecked, setAllChecked] = reactExports.useState(INITIAL_CHECKED);
-  const isCheckDataInitialized = reactExports.useRef(false);
-  const [errorMessage, setErrorMessage] = reactExports.useState("");
-  const fetchData = reactExports.useCallback(async () => {
-    try {
-      setCartItemsData(await getCartItems());
-    } catch (error) {
-      if (error instanceof Error) {
-        setErrorMessage(error.message);
-      }
-    }
-  }, []);
-  reactExports.useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-  reactExports.useEffect(() => {
-    if (cartItemsData.length > 0 && !isCheckDataInitialized.current) {
-      const data = cartItemsData.map(({ id: id2 }) => ({
-        id: id2,
-        checked: INITIAL_CHECKED
-      }));
-      setCartItemsCheckData(data);
-      isCheckDataInitialized.current = true;
-    }
-  }, [cartItemsData]);
-  const deleteItem = reactExports.useCallback(
-    async (cartId) => {
-      try {
-        await deleteCartItem(cartId);
-      } catch (error) {
-        if (error instanceof Error) {
-          setErrorMessage(error.message);
-        }
-      }
-      fetchData();
-      setCartItemsCheckData((prev2) => prev2.filter(({ id: id2 }) => id2 !== cartId));
-    },
-    [fetchData]
-  );
-  const increaseItemQuantity = reactExports.useCallback(
-    async (cartId, currentQuantity) => {
-      try {
-        await patchCartItem({
-          cartId,
-          quantity: currentQuantity + 1
-        });
-      } catch (error) {
-        if (error instanceof Error) {
-          setErrorMessage(error.message);
-        }
-      }
-      fetchData();
-    },
-    [fetchData]
-  );
-  const decreaseItemQuantity = reactExports.useCallback(
-    async (cartId, currentQuantity) => {
-      try {
-        await patchCartItem({
-          cartId,
-          quantity: currentQuantity - 1
-        });
-      } catch (error) {
-        if (error instanceof Error) {
-          setErrorMessage(error.message);
-        }
-      }
-      fetchData();
-    },
-    [fetchData]
-  );
-  const toggleAllChecked = () => {
-    setAllChecked((prev2) => !prev2);
-    setCartItemsCheckData((prev2) => {
-      return prev2.map((checkData) => ({
-        ...checkData,
-        checked: !allChecked
-      }));
-    });
-  };
-  const hasCheckedItem = () => {
-    return cartItemsCheckData.some(({ checked }) => checked);
-  };
-  const getItemChecked = (cartId) => {
-    var _a;
-    return ((_a = cartItemsCheckData.find(({ id: id2 }) => id2 === cartId)) == null ? void 0 : _a.checked) ?? false;
-  };
-  const toggleItemChecked = (cartId) => {
-    setCartItemsCheckData(
-      (prev2) => prev2.map(
-        (item) => item.id === cartId ? { ...item, checked: !item.checked } : item
-      )
-    );
-  };
-  const checkedItemsId = cartItemsCheckData.filter(({ checked }) => checked).map(({ id: id2 }) => id2);
-  const calculateOrderQuantity = () => {
-    return cartItemsData.filter(({ id: id2 }) => checkedItemsId.includes(id2)).reduce(
-      (orderQuantity, cartItem) => orderQuantity + cartItem.quantity,
-      0
-    );
-  };
-  const calculateOrderPrice = () => {
-    return cartItemsData.filter(({ id: id2 }) => checkedItemsId.includes(id2)).reduce(
-      (orderPrice, cartItem) => orderPrice + cartItem.quantity * cartItem.product.price,
-      0
-    );
-  };
-  const calculateShippingFee = () => {
-    const orderPrice = calculateOrderPrice();
-    if (orderPrice === 0)
-      return 0;
-    return orderPrice >= FREE_SHIPPING_THRESHOLD ? 0 : DEFAULT_SHIPPING_FEE;
-  };
-  return /* @__PURE__ */ jsxRuntimeExports.jsx(
-    CartContext.Provider,
-    {
-      value: {
-        cartItemsData,
-        cartItemsCheckData,
-        deleteItem,
-        increaseItemQuantity,
-        decreaseItemQuantity,
-        allChecked,
-        toggleAllChecked,
-        hasCheckedItem,
-        getItemChecked,
-        toggleItemChecked,
-        cartItemCount: cartItemsData.length,
-        orderItemCount: checkedItemsId.length,
-        orderQuantity: calculateOrderQuantity(),
-        orderPrice: calculateOrderPrice(),
-        shippingFee: calculateShippingFee(),
-        totalPrice: calculateOrderPrice() + calculateShippingFee(),
-        errorMessage
-      },
-      children
-    }
-  );
-};
 const Portal = ({ children, containerId = "custom-root" }) => {
   const [container, setContainer] = reactExports.useState(null);
   reactExports.useEffect(() => {
@@ -15351,6 +15209,162 @@ const ToastProvider = ({ children }) => {
     children,
     !!message && /* @__PURE__ */ jsxRuntimeExports.jsx(Portal, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(Toast, { message, type }) })
   ] });
+};
+const useToast = () => {
+  const context = reactExports.useContext(ToastContext);
+  if (!context) {
+    throw new Error("useToast must be used within ToastProvider");
+  }
+  return context;
+};
+const INITIAL_CHECKED = true;
+const FREE_SHIPPING_THRESHOLD = 1e5;
+const DEFAULT_SHIPPING_FEE = 3e3;
+const CartContext = reactExports.createContext(null);
+const CartProvider = ({ children }) => {
+  const [cartItemsData, setCartItemsData] = reactExports.useState([]);
+  const [cartItemsCheckData, setCartItemsCheckData] = reactExports.useState([]);
+  const [allChecked, setAllChecked] = reactExports.useState(INITIAL_CHECKED);
+  const isCheckDataInitialized = reactExports.useRef(false);
+  const [errorMessage, setErrorMessage] = reactExports.useState("");
+  const { showToast } = useToast();
+  reactExports.useEffect(() => {
+    showToast({ message: errorMessage, type: TOAST_TYPES.ERROR });
+  }, [errorMessage, showToast]);
+  const handleError = reactExports.useCallback((error) => {
+    if (error instanceof Error) {
+      setErrorMessage(error.message);
+    } else {
+      setErrorMessage("알 수 없는 오류가 발생했습니다.");
+    }
+  }, []);
+  const fetchData = reactExports.useCallback(async () => {
+    try {
+      setCartItemsData(await getCartItems());
+    } catch (error) {
+      handleError(error);
+    }
+  }, [handleError]);
+  reactExports.useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+  reactExports.useEffect(() => {
+    if (cartItemsData.length > 0 && !isCheckDataInitialized.current) {
+      const data = cartItemsData.map(({ id: id2 }) => ({
+        id: id2,
+        checked: INITIAL_CHECKED
+      }));
+      setCartItemsCheckData(data);
+      isCheckDataInitialized.current = true;
+    }
+  }, [cartItemsData]);
+  const deleteItem = reactExports.useCallback(
+    async (cartId) => {
+      try {
+        await deleteCartItem(cartId);
+      } catch (error) {
+        handleError(error);
+      }
+      fetchData();
+      setCartItemsCheckData((prev2) => prev2.filter(({ id: id2 }) => id2 !== cartId));
+    },
+    [fetchData, handleError]
+  );
+  const increaseItemQuantity = reactExports.useCallback(
+    async (cartId, currentQuantity) => {
+      try {
+        await patchCartItem({
+          cartId,
+          quantity: currentQuantity + 1
+        });
+      } catch (error) {
+        handleError(error);
+      }
+      fetchData();
+    },
+    [fetchData, handleError]
+  );
+  const decreaseItemQuantity = reactExports.useCallback(
+    async (cartId, currentQuantity) => {
+      try {
+        await patchCartItem({
+          cartId,
+          quantity: currentQuantity - 1
+        });
+      } catch (error) {
+        handleError(error);
+      }
+      fetchData();
+    },
+    [fetchData, handleError]
+  );
+  const toggleAllChecked = () => {
+    setAllChecked((prev2) => !prev2);
+    setCartItemsCheckData((prev2) => {
+      return prev2.map((checkData) => ({
+        ...checkData,
+        checked: !allChecked
+      }));
+    });
+  };
+  const hasCheckedItem = () => {
+    return cartItemsCheckData.some(({ checked }) => checked);
+  };
+  const getItemChecked = (cartId) => {
+    var _a;
+    return ((_a = cartItemsCheckData.find(({ id: id2 }) => id2 === cartId)) == null ? void 0 : _a.checked) ?? false;
+  };
+  const toggleItemChecked = (cartId) => {
+    setCartItemsCheckData(
+      (prev2) => prev2.map(
+        (item) => item.id === cartId ? { ...item, checked: !item.checked } : item
+      )
+    );
+  };
+  const checkedItemsId = cartItemsCheckData.filter(({ checked }) => checked).map(({ id: id2 }) => id2);
+  const calculateOrderQuantity = () => {
+    return cartItemsData.filter(({ id: id2 }) => checkedItemsId.includes(id2)).reduce(
+      (orderQuantity, cartItem) => orderQuantity + cartItem.quantity,
+      0
+    );
+  };
+  const calculateOrderPrice = () => {
+    return cartItemsData.filter(({ id: id2 }) => checkedItemsId.includes(id2)).reduce(
+      (orderPrice, cartItem) => orderPrice + cartItem.quantity * cartItem.product.price,
+      0
+    );
+  };
+  const calculateShippingFee = () => {
+    const orderPrice = calculateOrderPrice();
+    if (orderPrice === 0)
+      return 0;
+    return orderPrice >= FREE_SHIPPING_THRESHOLD ? 0 : DEFAULT_SHIPPING_FEE;
+  };
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(
+    CartContext.Provider,
+    {
+      value: {
+        cartItemsData,
+        cartItemsCheckData,
+        deleteItem,
+        increaseItemQuantity,
+        decreaseItemQuantity,
+        allChecked,
+        toggleAllChecked,
+        hasCheckedItem,
+        getItemChecked,
+        toggleItemChecked,
+        cartItemCount: cartItemsData.length,
+        orderItemCount: checkedItemsId.length,
+        orderQuantity: calculateOrderQuantity(),
+        orderPrice: calculateOrderPrice(),
+        shippingFee: calculateShippingFee(),
+        totalPrice: calculateOrderPrice() + calculateShippingFee(),
+        errorMessage
+      },
+      children
+    }
+  );
 };
 const Description$1 = newStyled.div`
   font-weight: 500;
@@ -15656,18 +15670,12 @@ const PriceInfo = ({ label, price }) => {
     ] })
   ] });
 };
-const useToast = () => {
-  const context = reactExports.useContext(ToastContext);
-  if (!context) {
-    throw new Error("useToast must be used within ToastProvider");
-  }
-  return context;
-};
 const Main$1 = newStyled.div`
   display: flex;
   flex-direction: column;
   padding: 32px 24px 36px;
   flex-grow: 1;
+  height: calc(100vh - 128px);
 `;
 const Logo = newStyled.a`
   font-weight: 800;
@@ -15680,6 +15688,7 @@ const ContentContainer = newStyled.div`
   flex-direction: column;
   margin-top: 15px;
   flex-grow: 1;
+  overflow: hidden;
 `;
 const CartContainer = newStyled.div`
   display: flex;
@@ -15687,13 +15696,13 @@ const CartContainer = newStyled.div`
   padding: 32px 0;
   flex-grow: 1;
   gap: 20px;
+  min-height: 0;
 `;
 const CartItemsContainer = newStyled.div`
   display: flex;
   flex-direction: column;
   gap: 20px;
   overflow-y: auto;
-  max-height: 400px;
   padding-right: 12px;
 `;
 const InfoContainer = newStyled.div`
@@ -15722,16 +15731,11 @@ const CartPage = () => {
     cartItemCount,
     orderPrice,
     shippingFee,
-    totalPrice,
-    errorMessage
+    totalPrice
   } = useCart();
-  const { showToast } = useToast();
-  reactExports.useEffect(() => {
-    showToast({ message: errorMessage, type: TOAST_TYPES.ERROR });
-  }, [errorMessage, showToast]);
   const navigate = useNavigate();
   const navigateToOrderPage = () => {
-    navigate("/order");
+    navigate(ROUTES.ORDER);
   };
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
     /* @__PURE__ */ jsxRuntimeExports.jsx(Header$1, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(Logo, { href: CLIENT_BASE_PATH, children: "SHOP" }) }),
@@ -15774,7 +15778,6 @@ const CartPage = () => {
 const Header = ({ children }) => {
   return /* @__PURE__ */ jsxRuntimeExports.jsx(Header$1, { children });
 };
-const BackIcon$1 = "/react-shopping-cart/left-arrow.svg";
 const Main = newStyled.div`
   display: flex;
   flex-direction: column;
@@ -15782,7 +15785,7 @@ const Main = newStyled.div`
   justify-content: center;
   align-items: center;
 `;
-const BackIcon = newStyled.img`
+const BackIcon$1 = newStyled.img`
   width: 20px;
   height: 20px;
   cursor: pointer;
@@ -15808,18 +15811,19 @@ const Price = newStyled.div`
   font-weight: 700;
   font-size: 26px;
 `;
+const BackIcon = "/react-shopping-cart/left-arrow.svg";
 const OrderPage = () => {
   const { orderItemCount, orderQuantity, totalPrice } = useCart();
   const navigate = useNavigate();
   const navigateToBack = () => {
-    navigate(-1);
+    navigate(ROUTES.HOME);
   };
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
     /* @__PURE__ */ jsxRuntimeExports.jsx(Header, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-      BackIcon,
+      BackIcon$1,
       {
         role: "button",
-        src: BackIcon$1,
+        src: BackIcon,
         alt: "back-icon",
         onClick: navigateToBack,
         tabIndex: 0
@@ -15854,11 +15858,11 @@ const Layout = () => {
 const router = createBrowserRouter(
   [
     {
-      path: "/",
+      path: ROUTES.HOME,
       element: /* @__PURE__ */ jsxRuntimeExports.jsx(Layout, {}),
       children: [
-        { path: "/", element: /* @__PURE__ */ jsxRuntimeExports.jsx(CartPage, {}) },
-        { path: "/order", element: /* @__PURE__ */ jsxRuntimeExports.jsx(OrderPage, {}) }
+        { path: ROUTES.HOME, element: /* @__PURE__ */ jsxRuntimeExports.jsx(CartPage, {}) },
+        { path: ROUTES.ORDER, element: /* @__PURE__ */ jsxRuntimeExports.jsx(OrderPage, {}) }
       ]
     }
   ],
@@ -15871,7 +15875,7 @@ const App = () => {
 };
 async function enableMocking() {
   {
-    const { worker } = await __vitePreload(() => import("./browser-CgQYY_U8.js"), true ? [] : void 0);
+    const { worker } = await __vitePreload(() => import("./browser-C0grwGuO.js"), true ? [] : void 0);
     return worker.start({
       serviceWorker: {
         url: `${window.location.origin}${CLIENT_BASE_PATH}mockServiceWorker.js`,

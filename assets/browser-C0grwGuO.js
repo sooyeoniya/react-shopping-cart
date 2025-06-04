@@ -27,7 +27,7 @@ var __privateMethod = (obj, member, method) => {
   return method;
 };
 var _executor, _decorate, decorate_fn, _a2, _executor2, _decorate2, decorate_fn2, _b2, _c2;
-import { A as API_BASE_URL } from "./index-CIor0Wsn.js";
+import { A as API_BASE_URL } from "./index-DOC_rZ3s.js";
 var POSITIONALS_EXP$1 = /(%?)(%([sdijo]))/g;
 function serializePositional$1(positional, flag) {
   switch (flag) {
