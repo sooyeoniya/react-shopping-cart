@@ -15057,158 +15057,48 @@ function MobileLayout({ children }) {
   ] });
 }
 const ROUTES = {
-  HOME: "/",
-  ORDER: "/order"
+  CART: "/",
+  ORDER: "/order",
+  PAYMENT: "/payment"
 };
-const FREE_SHIPPING_THRESHOLD = 1e5;
-const DEFAULT_SHIPPING_FEE = 3e3;
-const useCartCalculation = (cartItemsData, checkedItemsId) => {
-  const { orderQuantity, orderPrice } = reactExports.useMemo(() => {
-    const checkedItemsSet = new Set(checkedItemsId);
-    return cartItemsData.filter(({ id: id2 }) => checkedItemsSet.has(id2)).reduce(
-      (acc, item) => ({
-        orderQuantity: acc.orderQuantity + item.quantity,
-        orderPrice: acc.orderPrice + item.quantity * item.product.price
-      }),
-      { orderQuantity: 0, orderPrice: 0 }
-    );
-  }, [cartItemsData, checkedItemsId]);
-  const shippingFee = reactExports.useMemo(() => {
-    if (orderPrice === 0)
-      return 0;
-    return orderPrice >= FREE_SHIPPING_THRESHOLD ? 0 : DEFAULT_SHIPPING_FEE;
-  }, [orderPrice]);
-  const totalPrice = orderPrice + shippingFee;
-  return {
-    orderQuantity,
-    orderPrice,
-    shippingFee,
-    totalPrice
-  };
-};
-const INITIAL_CHECKED = true;
-const useCartCheck = (cartItemsData) => {
-  const [cartItemsCheckData, setCartItemsCheckData] = reactExports.useState([]);
-  const [allChecked, setAllChecked] = reactExports.useState(INITIAL_CHECKED);
-  const isCheckDataInitialized = reactExports.useRef(false);
-  reactExports.useEffect(() => {
-    if (cartItemsData.length > 0 && !isCheckDataInitialized.current) {
-      const data = cartItemsData.map(({ id: id2 }) => ({
-        id: id2,
-        checked: INITIAL_CHECKED
-      }));
-      setCartItemsCheckData(data);
-      isCheckDataInitialized.current = true;
+const cartReducer = (state, action) => {
+  const calculateAllSelected = (items) => items.length > 0 && items.every((item) => item.selected);
+  switch (action.type) {
+    case "REPLACE_ITEMS":
+      return {
+        items: action.items,
+        allSelected: calculateAllSelected(action.items)
+      };
+    case "TOGGLE_ALL_SELECTED": {
+      const newSelected = !state.allSelected;
+      return {
+        items: state.items.map((i) => ({ ...i, selected: newSelected })),
+        allSelected: newSelected
+      };
     }
-  }, [cartItemsData]);
-  reactExports.useEffect(() => {
-    setCartItemsCheckData(
-      (prev2) => prev2.filter(({ id: id2 }) => cartItemsData.some((item) => item.id === id2))
-    );
-  }, [cartItemsData]);
-  const getItemChecked = (cartId) => {
-    var _a;
-    return ((_a = cartItemsCheckData.find(({ id: id2 }) => id2 === cartId)) == null ? void 0 : _a.checked) ?? false;
-  };
-  const toggleAllChecked = () => {
-    setAllChecked((prev2) => !prev2);
-    setCartItemsCheckData((prev2) => {
-      return prev2.map((checkData) => ({
-        ...checkData,
-        checked: !allChecked
-      }));
-    });
-  };
-  const toggleItemChecked = (cartId) => {
-    setCartItemsCheckData(
-      (prev2) => prev2.map(
-        (item) => item.id === cartId ? { ...item, checked: !item.checked } : item
-      )
-    );
-  };
-  return {
-    cartItemsCheckData,
-    allChecked,
-    getItemChecked,
-    toggleAllChecked,
-    toggleItemChecked
-  };
+    case "TOGGLE_ITEM_SELECTED": {
+      const newItems = state.items.map(
+        (i) => i.id === action.id ? { ...i, selected: !i.selected } : i
+      );
+      return {
+        items: newItems,
+        allSelected: calculateAllSelected(newItems)
+      };
+    }
+    default:
+      return state;
+  }
 };
-const API_KEY = "c29veWVvbml5YTpwYXNzd29yZA==";
-class HTTPClient {
-  constructor(baseUrl, apiKey) {
-    __publicField(this, "baseUrl", "");
-    __publicField(this, "apiKey", "");
-    this.baseUrl = baseUrl;
-    this.apiKey = apiKey || "";
-  }
-  getHeaders() {
-    return {
-      "Content-Type": "application/json",
-      ...this.apiKey && { Authorization: `Basic ${this.apiKey}` }
-    };
-  }
-  async get(url) {
-    const response = await fetch(this.baseUrl + url, {
-      headers: this.getHeaders()
-    });
-    return response;
-  }
-  async post(url, data) {
-    const response = await fetch(this.baseUrl + url, {
-      method: "POST",
-      headers: this.getHeaders(),
-      body: JSON.stringify(data)
-    });
-    return response;
-  }
-  async patch(url, data) {
-    const response = await fetch(this.baseUrl + url, {
-      method: "PATCH",
-      headers: this.getHeaders(),
-      body: JSON.stringify(data)
-    });
-    return response;
-  }
-  async delete(url) {
-    const response = await fetch(this.baseUrl + url, {
-      method: "DELETE",
-      headers: this.getHeaders()
-    });
-    return response;
-  }
-  setApiKey(apiKey) {
-    this.apiKey = apiKey;
-  }
-}
-const httpClient = new HTTPClient(API_BASE_URL, API_KEY);
-const ERROR_MESSAGE$2 = "장바구니에 상품을 제거하던 중 에러가 발생했습니다.";
-const deleteCartItem = async (id2) => {
-  const response = await httpClient.delete(`/cart-items/${id2}`);
-  if (!response.ok)
-    throw new Error(ERROR_MESSAGE$2);
-};
-const ERROR_MESSAGE$1 = "징바구니를 가져오는 데 실패했습니다.";
-const getCartItems = async () => {
-  const params = new URLSearchParams({
-    page: "0",
-    size: "50",
-    sort: "asc"
+const CartStateContext = reactExports.createContext(null);
+const CartDispatchContext = reactExports.createContext(
+  null
+);
+const CartProvider = ({ children }) => {
+  const [state, dispatch] = reactExports.useReducer(cartReducer, {
+    items: [],
+    allSelected: false
   });
-  const response = await httpClient.get(`/cart-items?${params.toString()}`);
-  if (!response.ok)
-    throw new Error(ERROR_MESSAGE$1);
-  const data = await response.json();
-  return data.content;
-};
-const ERROR_MESSAGE = "장바구니에서 상품의 수량을 조절하던 중 에러가 발생했습니다.";
-const patchCartItem = async ({ cartId, quantity }) => {
-  const response = await httpClient.patch(`/cart-items/${cartId}`, {
-    id: cartId,
-    quantity
-  });
-  if (!response.ok)
-    throw new Error(ERROR_MESSAGE);
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(CartDispatchContext.Provider, { value: dispatch, children: /* @__PURE__ */ jsxRuntimeExports.jsx(CartStateContext.Provider, { value: state, children }) });
 };
 const Portal = ({ children, containerId = "custom-root" }) => {
   const [container, setContainer] = reactExports.useState(null);
@@ -15219,6 +15109,54 @@ const Portal = ({ children, containerId = "custom-root" }) => {
   if (!container)
     return children;
   return reactDomExports.createPortal(children, container);
+};
+const ModalBackdrop = newStyled.div`
+  display: flex;
+  width: 100%;
+  height: 100%;
+  justify-content: center;
+  align-items: center;
+  background-color: rgba(0, 0, 0, 0.3);
+  inset: 0;
+  position: absolute;
+`;
+const ModalContainer = newStyled.div`
+  display: flex;
+  width: 100%;
+  height: 66%;
+  overflow: hidden;
+  margin: 0 24px;
+  flex-direction: column;
+  gap: 5px;
+  padding: 32px;
+  background-color: #fff;
+  border-radius: 10px;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.16), 0 3px 6px rgba(0, 0, 0, 0.23);
+`;
+const ModalContent = newStyled.div`
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+`;
+const Modal = ({ open, onClose, children }) => {
+  const stopPropagation = (e2) => {
+    e2.stopPropagation();
+  };
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(jsxRuntimeExports.Fragment, { children: open && /* @__PURE__ */ jsxRuntimeExports.jsx(Portal, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(ModalBackdrop, { onClick: onClose, children: /* @__PURE__ */ jsxRuntimeExports.jsx(ModalContainer, { onClick: stopPropagation, children: /* @__PURE__ */ jsxRuntimeExports.jsx(ModalContent, { children }) }) }) }) });
+};
+const ModalContext = reactExports.createContext(null);
+const ModalProvider = ({ children }) => {
+  const [modalContent, setModalContent] = reactExports.useState(
+    null
+  );
+  const openModal = (content) => setModalContent(content);
+  const closeModal = () => setModalContent(null);
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(ModalContext.Provider, { value: { openModal, closeModal }, children: [
+    children,
+    /* @__PURE__ */ jsxRuntimeExports.jsx(Modal, { open: modalContent !== null, onClose: closeModal, children: modalContent })
+  ] });
 };
 const TOAST_TYPES = {
   SUCCESS: "success",
@@ -15284,110 +15222,10 @@ const ToastProvider = ({ children }) => {
     !!message && /* @__PURE__ */ jsxRuntimeExports.jsx(Portal, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(Toast, { message, type }) })
   ] });
 };
-const useToast = () => {
-  const context = reactExports.useContext(ToastContext);
-  if (!context) {
-    throw new Error("useToast must be used within ToastProvider");
-  }
-  return context;
-};
-const useErrorHandler = () => {
-  const { showToast } = useToast();
-  const handleError = reactExports.useCallback(
-    (error) => {
-      const message = error instanceof Error ? error.message : "알 수 없는 오류";
-      showToast({ message, type: TOAST_TYPES.ERROR });
-    },
-    [showToast]
-  );
-  return { handleError };
-};
-const useCartData = () => {
-  const [cartItemsData, setCartItemsData] = reactExports.useState([]);
-  const { handleError } = useErrorHandler();
-  const fetchData = reactExports.useCallback(async () => {
-    try {
-      setCartItemsData(await getCartItems());
-    } catch (error) {
-      handleError(error);
-    }
-  }, [handleError]);
-  reactExports.useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-  const deleteItem = reactExports.useCallback(
-    async (cartId) => {
-      try {
-        await deleteCartItem(cartId);
-      } catch (error) {
-        handleError(error);
-      }
-      fetchData();
-    },
-    [fetchData, handleError]
-  );
-  const updateItemQuantity = reactExports.useCallback(
-    async (cartId, newQuantity) => {
-      try {
-        await patchCartItem({
-          cartId,
-          quantity: newQuantity
-        });
-      } catch (error) {
-        handleError(error);
-      }
-      fetchData();
-    },
-    [fetchData, handleError]
-  );
-  return {
-    cartItemsData,
-    setCartItemsData,
-    fetchData,
-    deleteItem,
-    updateItemQuantity
-  };
-};
-const CartContext = reactExports.createContext(null);
-const CartProvider = ({ children }) => {
-  const { cartItemsData, deleteItem, updateItemQuantity } = useCartData();
-  const {
-    cartItemsCheckData,
-    allChecked,
-    getItemChecked,
-    toggleAllChecked,
-    toggleItemChecked
-  } = useCartCheck(cartItemsData);
-  const checkedItemsId = cartItemsCheckData.filter(({ checked }) => checked).map(({ id: id2 }) => id2);
-  const { orderQuantity, orderPrice, shippingFee, totalPrice } = useCartCalculation(cartItemsData, checkedItemsId);
-  return /* @__PURE__ */ jsxRuntimeExports.jsx(
-    CartContext.Provider,
-    {
-      value: {
-        cartItemsData,
-        cartItemsCheckData,
-        deleteItem,
-        increaseItemQuantity: (cartId, currentQuantity) => updateItemQuantity(cartId, currentQuantity + 1),
-        decreaseItemQuantity: (cartId, currentQuantity) => updateItemQuantity(cartId, currentQuantity - 1),
-        allChecked,
-        toggleAllChecked,
-        hasCheckedItem: checkedItemsId.length > 0,
-        getItemChecked,
-        toggleItemChecked,
-        cartItemCount: cartItemsData.length,
-        orderItemCount: checkedItemsId.length,
-        orderQuantity,
-        orderPrice,
-        shippingFee,
-        totalPrice
-      },
-      children
-    }
-  );
-};
 const Description$1 = newStyled.div`
   font-weight: 500;
   font-size: 16px;
+  color: #0a0d13;
 `;
 const Description = ({ children }) => {
   return /* @__PURE__ */ jsxRuntimeExports.jsx(Description$1, { children });
@@ -15411,6 +15249,29 @@ const EmptyFallback = () => {
     /* @__PURE__ */ jsxRuntimeExports.jsx(Description, { children: "장바구니에 담은 상품이 없습니다." })
   ] });
 };
+const FooterButton$1 = newStyled.button`
+  display: flex;
+  position: relative;
+  background-color: #000;
+  width: 100%;
+  height: 64px;
+  justify-content: center;
+  align-items: center;
+  padding: 0 24px;
+  font-weight: 700;
+  font-size: 18px;
+  color: #fff;
+  cursor: pointer;
+
+  &:hover {
+    background-color: rgb(35, 35, 35);
+  }
+
+  &:disabled {
+    background-color: rgb(208, 208, 208);
+    cursor: default;
+  }
+`;
 const Header$1 = newStyled.div`
   background-color: #000;
   width: 100%;
@@ -15419,19 +15280,291 @@ const Header$1 = newStyled.div`
   display: flex;
   align-items: center;
 `;
-const Title$1 = newStyled.div`
+const Title$3 = newStyled.div`
   font-weight: 700;
   font-size: 28px;
 `;
-const Title = ({ children }) => {
-  return /* @__PURE__ */ jsxRuntimeExports.jsx(Title$1, { children });
+const Title$2 = ({ children }) => {
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(Title$3, { children });
 };
-const useCart = () => {
-  const context = reactExports.useContext(CartContext);
+const PriceInfo$1 = newStyled.div`
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px;
+`;
+const Label$1 = newStyled.div`
+  font-weight: 700;
+  font-size: 18px;
+`;
+const Price$1 = newStyled.div`
+  font-weight: 700;
+  font-size: 26px;
+`;
+const PriceInfo = ({ label, price: price2, isNegative = false }) => {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(PriceInfo$1, { children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx(Label$1, { children: label }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs(Price$1, { children: [
+      isNegative && "-",
+      price2.toLocaleString(),
+      "원"
+    ] })
+  ] });
+};
+function useCartState() {
+  const state = reactExports.useContext(CartStateContext);
+  if (!state)
+    throw new Error("useCartState must be used within CartProvider");
+  return { ...state, cartItemCount: state.items.length };
+}
+function useCartSelector(selector) {
+  const state = useCartState();
+  return reactExports.useMemo(() => selector(state), [state, selector]);
+}
+class LocalStorage {
+  get(key) {
+    const item = localStorage.getItem(key);
+    return item ? JSON.parse(item) : null;
+  }
+  set(key, value) {
+    localStorage.setItem(key, JSON.stringify(value));
+  }
+  remove(key) {
+    localStorage.removeItem(key);
+  }
+  clear() {
+    localStorage.clear();
+  }
+}
+const _CartItemSelectionStorage = class _CartItemSelectionStorage {
+  constructor() {
+    __publicField(this, "storage", new LocalStorage());
+  }
+  getSelections() {
+    return this.storage.get(
+      _CartItemSelectionStorage.CART_ITEM_SELECTION_KEY
+    ) ?? [];
+  }
+  setSelection(cartId, selected) {
+    const selections = this.getSelections();
+    const existingIndex = selections.findIndex(
+      (item) => item.cartId === cartId
+    );
+    if (existingIndex >= 0) {
+      selections[existingIndex].selected = selected;
+    } else {
+      selections.push({ cartId, selected });
+    }
+    this.storage.set(
+      _CartItemSelectionStorage.CART_ITEM_SELECTION_KEY,
+      selections
+    );
+  }
+  setAllSelections(cartIds, selected) {
+    const selections = this.getSelections();
+    const updatedSelections = [...selections];
+    cartIds.forEach((cartId) => {
+      const existingIndex = updatedSelections.findIndex(
+        (item) => item.cartId === cartId
+      );
+      if (existingIndex >= 0) {
+        updatedSelections[existingIndex].selected = selected;
+      } else {
+        updatedSelections.push({ cartId, selected });
+      }
+    });
+    this.storage.set(
+      _CartItemSelectionStorage.CART_ITEM_SELECTION_KEY,
+      updatedSelections
+    );
+  }
+  removeSelection(cartId) {
+    const selections = this.getSelections();
+    const filteredSelections = selections.filter(
+      (item) => item.cartId !== cartId
+    );
+    this.storage.set(
+      _CartItemSelectionStorage.CART_ITEM_SELECTION_KEY,
+      filteredSelections
+    );
+  }
+  clearAllSelections() {
+    this.storage.remove(_CartItemSelectionStorage.CART_ITEM_SELECTION_KEY);
+  }
+  isItemSelected(cartId) {
+    var _a;
+    return ((_a = this.getSelections().find((item) => item.cartId === cartId)) == null ? void 0 : _a.selected) ?? false;
+  }
+};
+__publicField(_CartItemSelectionStorage, "CART_ITEM_SELECTION_KEY", "cartItemSelection");
+let CartItemSelectionStorage = _CartItemSelectionStorage;
+const cartItemSelectionStorage = new CartItemSelectionStorage();
+const useToast = () => {
+  const context = reactExports.useContext(ToastContext);
   if (!context) {
-    throw new Error("useCart must be used within CartProvider");
+    throw new Error("useToast must be used within ToastProvider");
   }
   return context;
+};
+const useErrorHandler = () => {
+  const { showToast } = useToast();
+  const handleError = reactExports.useCallback(
+    (error) => {
+      const message = error instanceof Error ? error.message : "알 수 없는 오류가 발생했습니다.";
+      showToast({ message, type: TOAST_TYPES.ERROR });
+    },
+    [showToast]
+  );
+  return { handleError };
+};
+const API_KEY = "c29veWVvbml5YTpwYXNzd29yZA==";
+class HTTPClient {
+  constructor(baseUrl, apiKey) {
+    __publicField(this, "baseUrl", "");
+    __publicField(this, "apiKey", "");
+    this.baseUrl = baseUrl;
+    this.apiKey = apiKey || "";
+  }
+  getHeaders() {
+    return {
+      "Content-Type": "application/json",
+      ...this.apiKey && { Authorization: `Basic ${this.apiKey}` }
+    };
+  }
+  async get(url) {
+    const response = await fetch(this.baseUrl + url, {
+      headers: this.getHeaders()
+    });
+    return response;
+  }
+  async post(url, data) {
+    const response = await fetch(this.baseUrl + url, {
+      method: "POST",
+      headers: this.getHeaders(),
+      body: JSON.stringify(data)
+    });
+    return response;
+  }
+  async patch(url, data) {
+    const response = await fetch(this.baseUrl + url, {
+      method: "PATCH",
+      headers: this.getHeaders(),
+      body: JSON.stringify(data)
+    });
+    return response;
+  }
+  async delete(url) {
+    const response = await fetch(this.baseUrl + url, {
+      method: "DELETE",
+      headers: this.getHeaders()
+    });
+    return response;
+  }
+  setApiKey(apiKey) {
+    this.apiKey = apiKey;
+  }
+}
+const httpClient = new HTTPClient(API_BASE_URL, API_KEY);
+const ERROR_MESSAGE$2 = "장바구니를 가져오는 데 실패했습니다.";
+const getCartItems = async () => {
+  const params = new URLSearchParams({
+    page: "0",
+    size: "50",
+    sort: "asc"
+  });
+  const response = await httpClient.get(`/cart-items?${params.toString()}`);
+  if (!response.ok)
+    throw new Error(ERROR_MESSAGE$2);
+  const data = await response.json();
+  return data.content;
+};
+const ERROR_MESSAGE$1 = "장바구니에 상품을 제거하던 중 에러가 발생했습니다.";
+const deleteCartItem = async (id2) => {
+  const response = await httpClient.delete(`/cart-items/${id2}`);
+  if (!response.ok)
+    throw new Error(ERROR_MESSAGE$1);
+};
+const ERROR_MESSAGE = "장바구니에서 상품의 수량을 조절하던 중 에러가 발생했습니다.";
+const patchCartItem = async ({ cartId, quantity }) => {
+  const response = await httpClient.patch(`/cart-items/${cartId}`, {
+    id: cartId,
+    quantity
+  });
+  if (!response.ok)
+    throw new Error(ERROR_MESSAGE);
+};
+const useCartOperations = () => {
+  const dispatch = reactExports.useContext(CartDispatchContext);
+  const { handleError } = useErrorHandler();
+  if (!dispatch) {
+    throw new Error("useCartOperations must be used within CartProvider");
+  }
+  const fetchData = reactExports.useCallback(async () => {
+    try {
+      const INITIAL_SELECTED = false;
+      const items = await getCartItems();
+      const itemsWithSelection = items.map((item) => ({
+        ...item,
+        selected: cartItemSelectionStorage.isItemSelected(item.id) || INITIAL_SELECTED
+      }));
+      dispatch({ type: "REPLACE_ITEMS", items: itemsWithSelection });
+    } catch (error) {
+      handleError(error);
+    }
+  }, [dispatch, handleError]);
+  const deleteItem = reactExports.useCallback(
+    async (cartId) => {
+      try {
+        await deleteCartItem(cartId);
+        cartItemSelectionStorage.removeSelection(cartId);
+      } catch (error) {
+        handleError(error);
+      }
+      fetchData();
+    },
+    [fetchData, handleError]
+  );
+  const updateItemQuantity = reactExports.useCallback(
+    async (cartId, newQuantity) => {
+      try {
+        await patchCartItem({
+          cartId,
+          quantity: newQuantity
+        });
+      } catch (error) {
+        handleError(error);
+      }
+      fetchData();
+    },
+    [fetchData, handleError]
+  );
+  return {
+    dispatch,
+    fetchData,
+    deleteItem,
+    updateItemQuantity
+  };
+};
+const useCartToggle = () => {
+  const state = useCartState();
+  const { dispatch } = useCartOperations();
+  const toggleAllSelected = () => {
+    const cartIds = state.items.map(({ id: id2 }) => id2);
+    cartItemSelectionStorage.setAllSelections(cartIds, !state.allSelected);
+    dispatch({ type: "TOGGLE_ALL_SELECTED" });
+  };
+  const toggleItemSelected = (cartId) => {
+    const targetItem = state.items.find((item) => item.id === cartId);
+    if (targetItem) {
+      cartItemSelectionStorage.setSelection(cartId, !targetItem.selected);
+    }
+    dispatch({ type: "TOGGLE_ITEM_SELECTED", id: cartId });
+  };
+  return {
+    toggleAllSelected,
+    toggleItemSelected
+  };
 };
 const EmptyCheckbox = "/react-shopping-cart/empty-check.svg";
 const FilledCheckbox = "/react-shopping-cart/filled-check.svg";
@@ -15444,8 +15577,8 @@ const Checkbox$1 = newStyled.div`
     transform: scale(0.95);
   }
 `;
-const Checkbox = ({ checked, onClick, ...props }) => {
-  return /* @__PURE__ */ jsxRuntimeExports.jsx(Checkbox$1, { onClick, ...props, children: checked ? /* @__PURE__ */ jsxRuntimeExports.jsx("img", { src: FilledCheckbox, alt: "filled-checkbox" }) : /* @__PURE__ */ jsxRuntimeExports.jsx("img", { src: EmptyCheckbox, alt: "empty-checkbox" }) });
+const Checkbox = ({ selected, onClick, ...props }) => {
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(Checkbox$1, { onClick, ...props, children: selected ? /* @__PURE__ */ jsxRuntimeExports.jsx("img", { src: FilledCheckbox, alt: "filled-checkbox" }) : /* @__PURE__ */ jsxRuntimeExports.jsx("img", { src: EmptyCheckbox, alt: "empty-checkbox" }) });
 };
 const AllSelector$1 = newStyled.div`
   display: flex;
@@ -15453,9 +15586,10 @@ const AllSelector$1 = newStyled.div`
   align-items: center;
 `;
 const AllSelector = () => {
-  const { allChecked, toggleAllChecked } = useCart();
+  const { allSelected } = useCartState();
+  const { toggleAllSelected } = useCartToggle();
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(AllSelector$1, { children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsx(Checkbox, { checked: allChecked, onClick: toggleAllChecked }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(Checkbox, { selected: allSelected, onClick: toggleAllSelected }),
     /* @__PURE__ */ jsxRuntimeExports.jsx(Description, { children: "전체 선택" })
   ] });
 };
@@ -15532,9 +15666,9 @@ const QuantityCounter = ({
     )
   ] });
 };
-const DEFAULT_IMAGE_URL = "./planet-default-image.svg";
-const isValidUrl = (url) => Boolean(url && (url.startsWith("http://") || url.startsWith("https://")));
-const getImageUrl = (url) => isValidUrl(url) ? url : DEFAULT_IMAGE_URL;
+const DEFAULT_IMAGE_URL$1 = "./planet-default-image.svg";
+const isValidUrl$1 = (url) => Boolean(url && (url.startsWith("http://") || url.startsWith("https://")));
+const getImageUrl$1 = (url) => isValidUrl$1(url) ? url : DEFAULT_IMAGE_URL$1;
 const CartItem$1 = newStyled.div`
   width: 100%;
   padding-top: 12px;
@@ -15557,7 +15691,7 @@ const CartItemWrapper = newStyled.div`
 const CartItemImage = newStyled.div`
   width: 112px;
   height: 112px;
-  background: no-repeat url(${({ $url }) => getImageUrl($url)});
+  background: no-repeat url(${({ $url }) => getImageUrl$1($url)});
   background-size: cover;
   border-radius: 8px;
 `;
@@ -15595,101 +15729,44 @@ const DeleteButton = newStyled.button`
   }
 `;
 const MIN_QUANTITY = 1;
-const CartItem = ({ cartItem }) => {
-  const {
-    id: cartId,
-    quantity: currentQuantity,
-    product: { name, price, imageUrl, stock: maxQuantity }
-  } = cartItem;
-  const {
-    deleteItem,
-    increaseItemQuantity,
-    decreaseItemQuantity,
-    getItemChecked,
-    toggleItemChecked
-  } = useCart();
+const CartItem = ({ item: { id: id2, quantity, product, selected } }) => {
+  const { deleteItem, updateItemQuantity } = useCartOperations();
+  const { toggleItemSelected } = useCartToggle();
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(CartItem$1, { children: [
     /* @__PURE__ */ jsxRuntimeExports.jsxs(CartItemHeader, { children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx(
-        Checkbox,
-        {
-          checked: getItemChecked(cartId),
-          onClick: () => toggleItemChecked(cartId)
-        }
-      ),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(DeleteButton, { onClick: () => deleteItem(cartId), children: "삭제" })
+      /* @__PURE__ */ jsxRuntimeExports.jsx(Checkbox, { selected, onClick: () => toggleItemSelected(id2) }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(DeleteButton, { onClick: () => deleteItem(id2), children: "삭제" })
     ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs(CartItemWrapper, { children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx(CartItemImage, { $url: imageUrl }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(CartItemImage, { $url: product.imageUrl }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs(CartItemInfo, { children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx(CartItemName, { children: name }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(CartItemName, { children: product.name }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs(CartItemPrice, { children: [
-          price.toLocaleString(),
+          product.price.toLocaleString(),
           "원"
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           QuantityCounter,
           {
-            quantity: currentQuantity,
-            onIncrease: () => increaseItemQuantity(cartId, currentQuantity),
-            onDecrease: () => decreaseItemQuantity(cartId, currentQuantity),
-            increaseDisabled: currentQuantity >= maxQuantity,
-            decreaseDisabled: currentQuantity <= MIN_QUANTITY
+            quantity,
+            onIncrease: () => updateItemQuantity(id2, quantity + 1),
+            onDecrease: () => updateItemQuantity(id2, quantity - 1),
+            increaseDisabled: quantity >= product.stock,
+            decreaseDisabled: quantity <= MIN_QUANTITY
           }
         )
       ] })
     ] })
   ] });
 };
-const FooterButton = newStyled.button`
-  display: flex;
-  position: relative;
-  background-color: #000;
-  width: 100%;
-  height: 64px;
-  justify-content: center;
-  align-items: center;
-  padding: 0 24px;
-  font-weight: 700;
-  font-size: 18px;
-  color: #fff;
-  cursor: pointer;
-
-  &:hover {
-    transition: scale(0.99);
-    background-color: rgb(35, 35, 35);
-  }
-
-  &:disabled {
-    background-color: rgb(208, 208, 208);
-    cursor: default;
-  }
-`;
-const PriceInfo$1 = newStyled.div`
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px;
-`;
-const Label$1 = newStyled.div`
-  font-weight: 700;
-  font-size: 18px;
-`;
-const Price$1 = newStyled.div`
-  font-weight: 700;
-  font-size: 26px;
-`;
-const PriceInfo = ({ label, price }) => {
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs(PriceInfo$1, { children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsx(Label$1, { children: label }),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs(Price$1, { children: [
-      price.toLocaleString(),
-      "원"
-    ] })
-  ] });
+const CartInitializer = () => {
+  const { fetchData } = useCartOperations();
+  reactExports.useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+  return null;
 };
-const Main$1 = newStyled.div`
+const Main$2 = newStyled.div`
   display: flex;
   flex-direction: column;
   padding: 32px 24px 36px;
@@ -15702,7 +15779,7 @@ const Logo = newStyled.a`
   color: #fff;
   text-decoration: none;
 `;
-const ContentContainer = newStyled.div`
+const ContentContainer$1 = newStyled.div`
   display: flex;
   flex-direction: column;
   margin-top: 15px;
@@ -15712,7 +15789,7 @@ const ContentContainer = newStyled.div`
 const CartContainer = newStyled.div`
   display: flex;
   flex-direction: column;
-  padding: 32px 0;
+  margin: 32px 0;
   flex-grow: 1;
   gap: 20px;
   min-height: 0;
@@ -15724,10 +15801,411 @@ const CartItemsContainer = newStyled.div`
   overflow-y: auto;
   padding-right: 12px;
 `;
+const InfoContainer$2 = newStyled.div`
+  display: flex;
+  align-items: center;
+  gap: 4px;
+`;
+const PriceSummary$1 = newStyled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-top: 16px;
+`;
+const PriceInfoWrapper$1 = newStyled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border-top: 1px solid #0000001a;
+  padding-top: 12px;
+`;
+const InfoIcon = "/react-shopping-cart/info.svg";
+const FREE_SHIPPING_THRESHOLD = 1e5;
+const DEFAULT_SHIPPING_FEE = 3e3;
+const useOrderCalculator = () => {
+  const items = useCartSelector((state) => state.items);
+  const orderItems = reactExports.useMemo(
+    () => items.filter((item) => item.selected),
+    [items]
+  );
+  const { orderQuantity, orderPrice } = reactExports.useMemo(() => {
+    return orderItems.reduce(
+      (acc, item) => ({
+        orderQuantity: acc.orderQuantity + item.quantity,
+        orderPrice: acc.orderPrice + item.quantity * item.product.price
+      }),
+      { orderQuantity: 0, orderPrice: 0 }
+    );
+  }, [orderItems]);
+  const shippingFee = reactExports.useMemo(() => {
+    if (orderPrice === 0)
+      return 0;
+    return orderPrice >= FREE_SHIPPING_THRESHOLD ? 0 : DEFAULT_SHIPPING_FEE;
+  }, [orderPrice]);
+  const totalPrice = orderPrice + shippingFee;
+  return {
+    orderItems,
+    orderItemCount: orderItems.length,
+    hasSelectedItem: orderItems.length > 0,
+    orderQuantity,
+    orderPrice,
+    shippingFee,
+    totalPrice
+  };
+};
+const CartPage = () => {
+  const { items, cartItemCount } = useCartState();
+  const { hasSelectedItem, orderPrice, shippingFee, totalPrice } = useOrderCalculator();
+  const navigate = useNavigate();
+  const navigateToOrderPage = () => {
+    navigate(ROUTES.ORDER);
+  };
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx(CartInitializer, {}),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(Header$1, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(Logo, { href: CLIENT_BASE_PATH, children: "SHOP" }) }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs(Main$2, { children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(Title$2, { children: "장바구니" }),
+      cartItemCount > 0 ? /* @__PURE__ */ jsxRuntimeExports.jsxs(ContentContainer$1, { children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(Description, { children: [
+          "현재 ",
+          cartItemCount,
+          "종류의 상품이 담겨있습니다."
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(CartContainer, { children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(AllSelector, {}),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(CartItemsContainer, { children: items.map((item) => /* @__PURE__ */ jsxRuntimeExports.jsx(CartItem, { item }, item.id)) })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(InfoContainer$2, { children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("img", { src: InfoIcon, alt: "info" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(Description, { children: "총 주문 금액이 100,000원 이상일 경우 무료 배송됩니다." })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(PriceSummary$1, { children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(PriceInfoWrapper$1, { children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx(PriceInfo, { label: "주문 금액", price: orderPrice }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(PriceInfo, { label: "배송비", price: shippingFee })
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(PriceInfoWrapper$1, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(PriceInfo, { label: "총 결제 금액", price: totalPrice }) })
+        ] })
+      ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx(EmptyFallback, {})
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
+      FooterButton$1,
+      {
+        disabled: cartItemCount === 0 || !hasSelectedItem,
+        onClick: navigateToOrderPage,
+        tabIndex: 0,
+        children: "주문 확인"
+      }
+    )
+  ] });
+};
+const Header = ({ children }) => {
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(Header$1, { children });
+};
+const coupons = [
+  {
+    id: 1,
+    code: "FIXED5000",
+    description: "5,000원 할인 쿠폰",
+    expirationDate: "2025-11-30",
+    discount: 5e3,
+    minimumAmount: 1e5,
+    discountType: "fixed"
+  },
+  {
+    id: 2,
+    code: "BOGO",
+    description: "2개 구매 시 1개 무료 쿠폰",
+    expirationDate: "2025-06-30",
+    buyQuantity: 2,
+    getQuantity: 1,
+    discountType: "buyXgetY"
+  },
+  {
+    id: 3,
+    code: "FREESHIPPING",
+    description: "5만원 이상 구매 시 무료 배송 쿠폰",
+    expirationDate: "2025-08-31",
+    minimumAmount: 5e4,
+    discountType: "freeShipping"
+  },
+  {
+    id: 4,
+    code: "MIRACLESALE",
+    description: "미라클모닝 30% 할인 쿠폰",
+    expirationDate: "2025-07-31",
+    discount: 30,
+    availableTime: {
+      start: "04:00:00",
+      end: "07:00:00"
+    },
+    discountType: "percentage"
+  }
+];
+const useModal = () => {
+  const context = reactExports.useContext(ModalContext);
+  if (!context) {
+    throw new Error("useModal must be used within ModalProvider");
+  }
+  return context;
+};
+const CouponItem$1 = newStyled.div`
+  width: 100%;
+  height: 83px;
+  padding-top: 12px;
+  border-top: 1px solid #0000001a;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+`;
+const CouponItemHeader = newStyled.div`
+  display: flex;
+  gap: 8px;
+  line-height: 27px;
+`;
+const Title$1 = newStyled.p`
+  font-weight: 700;
+  font-size: 18px;
+`;
+const CouponInfo = newStyled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-weight: 500;
+  font-size: 14px;
+`;
+const CouponItem = ({ item }) => {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(CouponItem$1, { children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs(CouponItemHeader, { children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(Checkbox, { selected: false, onClick: () => {
+      } }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(Title$1, { children: item.description })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs(CouponInfo, { children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { children: [
+        "만료일: ",
+        item.expirationDate
+      ] }),
+      item.minimumAmount && /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { children: [
+        "최소 주문 금액: ",
+        item.minimumAmount.toLocaleString(),
+        "원"
+      ] }),
+      item.availableTime && /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { children: [
+        "사용 가능 시간: ",
+        item.availableTime.start,
+        "-",
+        item.availableTime.end
+      ] })
+    ] })
+  ] });
+};
+const CouponModal$1 = newStyled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+`;
+const HeaderContainer = newStyled.div`
+  display: flex;
+  justify-content: space-between;
+  flex-shrink: 0;
+`;
+const Title = newStyled.p`
+  font-weight: 700;
+  font-size: 20px;
+`;
+const CloseButton = newStyled.img`
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+`;
+const InfoContainer$1 = newStyled.div`
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+`;
+const CouponItemsContainer = newStyled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+`;
+const ApplyCouponButton = newStyled.button`
+  width: 100%;
+  height: 48px;
+  background-color: #333;
+  color: #fff;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 17px;
+  font-weight: 700;
+  flex-shrink: 0;
+
+  &:hover {
+    transform: scale(0.995);
+    background-color: rgb(35, 35, 35);
+  }
+
+  &:disabled {
+    background-color: rgb(208, 208, 208);
+    cursor: default;
+  }
+`;
+const Close = "/react-shopping-cart/close.svg";
+const price = 6e3;
+const CouponModal = () => {
+  const { closeModal } = useModal();
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(CouponModal$1, { children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs(HeaderContainer, { children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(Title, { children: "쿠폰을 선택해 주세요" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(CloseButton, { src: Close, alt: "close-modal", onClick: closeModal })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs(InfoContainer$1, { children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("img", { src: InfoIcon, alt: "info" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(Description, { children: "쿠폰은 최대 2개까지 사용할 수 있습니다." })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(CouponItemsContainer, { children: coupons.map((item) => /* @__PURE__ */ jsxRuntimeExports.jsx(CouponItem, { item }, item.id)) }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs(ApplyCouponButton, { onClick: () => closeModal(), children: [
+      "총 ",
+      price.toLocaleString(),
+      "원 할인 쿠폰 사용하기"
+    ] })
+  ] });
+};
+const DEFAULT_IMAGE_URL = "./planet-default-image.svg";
+const isValidUrl = (url) => Boolean(url && (url.startsWith("http://") || url.startsWith("https://")));
+const getImageUrl = (url) => isValidUrl(url) ? url : DEFAULT_IMAGE_URL;
+const OrderItem$1 = newStyled.div`
+  width: 100%;
+  padding-top: 12px;
+  border-top: 1px solid #0000001a;
+  display: flex;
+  align-items: center;
+  flex-direction: row;
+  gap: 24px;
+`;
+const OrderItemImage = newStyled.div`
+  width: 112px;
+  height: 112px;
+  background: no-repeat url(${({ $url }) => getImageUrl($url)});
+  background-size: cover;
+  border-radius: 8px;
+`;
+const OrderItemInfo = newStyled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+  justify-content: center;
+`;
+const OrderItemName = newStyled.p`
+  font-weight: 500;
+  font-size: 16px;
+`;
+const OrderItemPrice = newStyled.p`
+  font-weight: 700;
+  font-size: 26px;
+`;
+const OrderItemQuantity = newStyled.p`
+  font-weight: 500;
+  font-size: 16px;
+`;
+const OrderItem = ({ quantity, product }) => {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(OrderItem$1, { children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx(OrderItemImage, { $url: product.imageUrl }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs(OrderItemInfo, { children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(OrderItemName, { children: product.name }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs(OrderItemPrice, { children: [
+        product.price.toLocaleString(),
+        "원"
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs(OrderItemQuantity, { children: [
+        quantity,
+        "개"
+      ] })
+    ] })
+  ] });
+};
+const Main$1 = newStyled.div`
+  display: flex;
+  flex-direction: column;
+  padding: 32px 24px 36px;
+  flex-grow: 1;
+  height: calc(100vh - 128px);
+`;
+const BackIcon$1 = newStyled.img`
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+`;
+const ContentContainer = newStyled.div`
+  display: flex;
+  flex-direction: column;
+  margin-top: 15px;
+  flex-grow: 1;
+  overflow: hidden;
+`;
+const DescriptionContainer$1 = newStyled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+`;
+const OrderItemsContainer = newStyled.div`
+  display: flex;
+  flex-direction: column;
+  margin-top: 32px;
+  margin-right: 12px;
+  gap: 20px;
+  overflow-y: auto;
+  flex-grow: 1;
+  min-height: 0;
+`;
+const CouponButton = newStyled.button`
+  width: 100%;
+  min-height: 48px;
+  border: 1px solid #33333340;
+  border-radius: 5px;
+  margin: 32px 0;
+  cursor: pointer;
+  transition: all 0.1s ease-in-out;
+
+  font-weight: 700;
+  font-size: 15px;
+  color: #333333bf;
+
+  &:hover {
+    background-color: #f5f5f5;
+  }
+
+  &:active {
+    transform: scale(0.995);
+    background-color: #ebebeb;
+  }
+`;
+const ShippingInfoContainer = newStyled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+`;
+const ShippingLabel = newStyled.p`
+  font-weight: 700;
+  font-size: 18px;
+`;
+const ShippingSurchargeContainer = newStyled.div`
+  display: flex;
+  gap: 8px;
+  line-height: 26px;
+`;
 const InfoContainer = newStyled.div`
   display: flex;
   align-items: center;
   gap: 4px;
+  margin-top: 32px;
 `;
 const PriceSummary = newStyled.div`
   display: flex;
@@ -15742,33 +16220,61 @@ const PriceInfoWrapper = newStyled.div`
   border-top: 1px solid #0000001a;
   padding-top: 12px;
 `;
-const InfoIcon = "/react-shopping-cart/info.svg";
-const CartPage = () => {
+const BackIcon = "/react-shopping-cart/left-arrow.svg";
+const OrderPage = () => {
   const {
-    cartItemsData,
-    hasCheckedItem,
-    cartItemCount,
+    orderItems,
+    orderItemCount,
+    orderQuantity,
     orderPrice,
     shippingFee,
     totalPrice
-  } = useCart();
+  } = useOrderCalculator();
+  const { openModal } = useModal();
+  const openCouponModal = () => openModal(/* @__PURE__ */ jsxRuntimeExports.jsx(CouponModal, {}));
   const navigate = useNavigate();
-  const navigateToOrderPage = () => {
-    navigate(ROUTES.ORDER);
-  };
+  const navigateToCart = () => navigate(ROUTES.CART);
+  const navigateToPayment = () => navigate(ROUTES.PAYMENT);
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsx(Header$1, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(Logo, { href: CLIENT_BASE_PATH, children: "SHOP" }) }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(Header, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+      BackIcon$1,
+      {
+        role: "button",
+        src: BackIcon,
+        alt: "back-icon",
+        onClick: navigateToCart,
+        tabIndex: 0
+      }
+    ) }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs(Main$1, { children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx(Title, { children: "장바구니" }),
-      cartItemCount > 0 ? /* @__PURE__ */ jsxRuntimeExports.jsxs(ContentContainer, { children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsxs(Description, { children: [
-          "현재 ",
-          cartItemCount,
-          "종류의 상품이 담겨있습니다."
+      /* @__PURE__ */ jsxRuntimeExports.jsx(Title$2, { children: "주문 확인" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs(ContentContainer, { children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(DescriptionContainer$1, { children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(Description, { children: [
+            "총 ",
+            orderItemCount,
+            "종류의 상품 ",
+            orderQuantity,
+            "개를 주문합니다."
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(Description, { children: "최종 결제 금액을 확인해 주세요." })
         ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs(CartContainer, { children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx(AllSelector, {}),
-          /* @__PURE__ */ jsxRuntimeExports.jsx(CartItemsContainer, { children: cartItemsData.map((cartItem) => /* @__PURE__ */ jsxRuntimeExports.jsx(CartItem, { cartItem }, cartItem.id)) })
+        /* @__PURE__ */ jsxRuntimeExports.jsx(OrderItemsContainer, { children: orderItems.map((item) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+          OrderItem,
+          {
+            quantity: item.quantity,
+            product: item.product
+          },
+          item.id
+        )) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(CouponButton, { onClick: openCouponModal, children: "쿠폰 적용" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(ShippingInfoContainer, { children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(ShippingLabel, { children: "배송 정보" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(ShippingSurchargeContainer, { children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx(Checkbox, { selected: false, onClick: () => {
+            } }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(Description, { children: "제주도 및 도서 산간 지역" })
+          ] })
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs(InfoContainer, { children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("img", { src: InfoIcon, alt: "info" }),
@@ -15777,25 +16283,18 @@ const CartPage = () => {
         /* @__PURE__ */ jsxRuntimeExports.jsxs(PriceSummary, { children: [
           /* @__PURE__ */ jsxRuntimeExports.jsxs(PriceInfoWrapper, { children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx(PriceInfo, { label: "주문 금액", price: orderPrice }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(PriceInfo, { label: "쿠폰 할인 금액", price: 0, isNegative: true }),
             /* @__PURE__ */ jsxRuntimeExports.jsx(PriceInfo, { label: "배송비", price: shippingFee })
           ] }),
           /* @__PURE__ */ jsxRuntimeExports.jsx(PriceInfoWrapper, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(PriceInfo, { label: "총 결제 금액", price: totalPrice }) })
         ] })
-      ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx(EmptyFallback, {})
+      ] })
     ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx(
-      FooterButton,
-      {
-        disabled: cartItemCount === 0 || !hasCheckedItem,
-        onClick: navigateToOrderPage,
-        tabIndex: 0,
-        children: "주문 확인"
-      }
-    )
+    /* @__PURE__ */ jsxRuntimeExports.jsx(FooterButton$1, { onClick: navigateToPayment, children: "결제하기" })
   ] });
 };
-const Header = ({ children }) => {
-  return /* @__PURE__ */ jsxRuntimeExports.jsx(Header$1, { children });
+const FooterButton = ({ children, ...props }) => {
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(FooterButton$1, { ...props, children });
 };
 const Main = newStyled.div`
   display: flex;
@@ -15804,7 +16303,7 @@ const Main = newStyled.div`
   justify-content: center;
   align-items: center;
 `;
-const BackIcon$1 = newStyled.img`
+newStyled.img`
   width: 20px;
   height: 20px;
   cursor: pointer;
@@ -15830,33 +16329,21 @@ const Price = newStyled.div`
   font-weight: 700;
   font-size: 26px;
 `;
-const BackIcon = "/react-shopping-cart/left-arrow.svg";
-const OrderPage = () => {
-  const { orderItemCount, orderQuantity, totalPrice } = useCart();
+const PaymentPage = () => {
+  const { orderItemCount, orderQuantity, totalPrice } = useOrderCalculator();
   const navigate = useNavigate();
-  const navigateToBack = () => {
-    navigate(ROUTES.HOME);
-  };
+  const navigateToCart = () => navigate(ROUTES.CART);
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsx(Header, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-      BackIcon$1,
-      {
-        role: "button",
-        src: BackIcon,
-        alt: "back-icon",
-        onClick: navigateToBack,
-        tabIndex: 0
-      }
-    ) }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(Header, {}),
     /* @__PURE__ */ jsxRuntimeExports.jsxs(Main, { children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx(Title, { children: "주문 확인" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(Title$2, { children: "주문 확인" }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs(DescriptionContainer, { children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs(Description, { children: [
           "총 ",
           orderItemCount,
           "종류의 상품 ",
           orderQuantity,
-          "개를 주문합니다."
+          "개를 주문했습니다."
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsx(Description, { children: "최종 결제 금액을 확인해 주세요." })
       ] }),
@@ -15868,20 +16355,21 @@ const OrderPage = () => {
         ] })
       ] })
     ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx(FooterButton, { disabled: true, children: "결제하기" })
+    /* @__PURE__ */ jsxRuntimeExports.jsx(FooterButton, { onClick: navigateToCart, children: "장바구니로 돌아가기" })
   ] });
 };
 const Layout = () => {
-  return /* @__PURE__ */ jsxRuntimeExports.jsx(MobileLayout, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(ToastProvider, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(CartProvider, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(Outlet, {}) }) }) });
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(MobileLayout, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(ToastProvider, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(CartProvider, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(ModalProvider, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(Outlet, {}) }) }) }) });
 };
 const router = createBrowserRouter(
   [
     {
-      path: ROUTES.HOME,
+      path: ROUTES.CART,
       element: /* @__PURE__ */ jsxRuntimeExports.jsx(Layout, {}),
       children: [
-        { path: ROUTES.HOME, element: /* @__PURE__ */ jsxRuntimeExports.jsx(CartPage, {}) },
-        { path: ROUTES.ORDER, element: /* @__PURE__ */ jsxRuntimeExports.jsx(OrderPage, {}) }
+        { path: ROUTES.CART, element: /* @__PURE__ */ jsxRuntimeExports.jsx(CartPage, {}) },
+        { path: ROUTES.ORDER, element: /* @__PURE__ */ jsxRuntimeExports.jsx(OrderPage, {}) },
+        { path: ROUTES.PAYMENT, element: /* @__PURE__ */ jsxRuntimeExports.jsx(PaymentPage, {}) }
       ]
     }
   ],
@@ -15894,7 +16382,7 @@ const App = () => {
 };
 async function enableMocking() {
   {
-    const { worker } = await __vitePreload(() => import("./browser-pQXgs3md.js"), true ? [] : void 0);
+    const { worker } = await __vitePreload(() => import("./browser-D7d3FGO4.js"), true ? [] : void 0);
     return worker.start({
       serviceWorker: {
         url: `${window.location.origin}${CLIENT_BASE_PATH}mockServiceWorker.js`,
@@ -15910,5 +16398,6 @@ enableMocking().then(
   )
 );
 export {
-  API_BASE_URL as A
+  API_BASE_URL as A,
+  coupons as c
 };
