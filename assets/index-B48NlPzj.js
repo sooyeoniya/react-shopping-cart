@@ -15061,22 +15061,27 @@ const ROUTES = {
   ORDER: "/order",
   PAYMENT: "/payment"
 };
+const CART_ACTION_TYPES = {
+  REPLACE_ITEMS: "REPLACE_ITEMS",
+  TOGGLE_ALL_SELECTED: "TOGGLE_ALL_SELECTED",
+  TOGGLE_ITEM_SELECTED: "TOGGLE_ITEM_SELECTED"
+};
 const cartReducer = (state, action) => {
   const calculateAllSelected = (items) => items.length > 0 && items.every((item) => item.selected);
   switch (action.type) {
-    case "REPLACE_ITEMS":
+    case CART_ACTION_TYPES.REPLACE_ITEMS:
       return {
         items: action.items,
         allSelected: calculateAllSelected(action.items)
       };
-    case "TOGGLE_ALL_SELECTED": {
+    case CART_ACTION_TYPES.TOGGLE_ALL_SELECTED: {
       const newSelected = !state.allSelected;
       return {
         items: state.items.map((i) => ({ ...i, selected: newSelected })),
         allSelected: newSelected
       };
     }
-    case "TOGGLE_ITEM_SELECTED": {
+    case CART_ACTION_TYPES.TOGGLE_ITEM_SELECTED: {
       const newItems = state.items.map(
         (i) => i.id === action.id ? { ...i, selected: !i.selected } : i
       );
@@ -15287,6 +15292,22 @@ const Title$3 = newStyled.div`
 const Title$2 = ({ children }) => {
   return /* @__PURE__ */ jsxRuntimeExports.jsx(Title$3, { children });
 };
+const formatCurrency = (price) => {
+  return `${price.toLocaleString()}원`;
+};
+const formatDate = (dateString) => {
+  const date = new Date(dateString);
+  return `${date.getFullYear()}년 ${date.getMonth() + 1}월 ${date.getDate()}일`;
+};
+const formatTime = (timeString) => {
+  const [hours, minutes] = timeString.split(":").map(Number);
+  const period = hours >= 12 ? "오후" : "오전";
+  const hour = hours % 12 || 12;
+  return `${period} ${hour}시${minutes > 0 ? ` ${minutes}분` : ""}`;
+};
+const formatTimeRange = (start, end) => {
+  return `${formatTime(start)}부터 ${formatTime(end)}까지`;
+};
 const PriceInfo$1 = newStyled.div`
   width: 100%;
   display: flex;
@@ -15302,13 +15323,12 @@ const Price$1 = newStyled.div`
   font-weight: 700;
   font-size: 26px;
 `;
-const PriceInfo = ({ label, price: price2, isNegative = false }) => {
+const PriceInfo = ({ label, price, isNegative = false }) => {
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(PriceInfo$1, { children: [
     /* @__PURE__ */ jsxRuntimeExports.jsx(Label$1, { children: label }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs(Price$1, { children: [
       isNegative && "-",
-      price2.toLocaleString(),
-      "원"
+      formatCurrency(price)
     ] })
   ] });
 };
@@ -15466,6 +15486,12 @@ class HTTPClient {
   }
 }
 const httpClient = new HTTPClient(API_BASE_URL, API_KEY);
+const ERROR_MESSAGE$3 = "장바구니에 상품을 제거하던 중 에러가 발생했습니다.";
+const deleteCartItem = async (id2) => {
+  const response = await httpClient.delete(`/cart-items/${id2}`);
+  if (!response.ok)
+    throw new Error(ERROR_MESSAGE$3);
+};
 const ERROR_MESSAGE$2 = "장바구니를 가져오는 데 실패했습니다.";
 const getCartItems = async () => {
   const params = new URLSearchParams({
@@ -15479,20 +15505,14 @@ const getCartItems = async () => {
   const data = await response.json();
   return data.content;
 };
-const ERROR_MESSAGE$1 = "장바구니에 상품을 제거하던 중 에러가 발생했습니다.";
-const deleteCartItem = async (id2) => {
-  const response = await httpClient.delete(`/cart-items/${id2}`);
-  if (!response.ok)
-    throw new Error(ERROR_MESSAGE$1);
-};
-const ERROR_MESSAGE = "장바구니에서 상품의 수량을 조절하던 중 에러가 발생했습니다.";
+const ERROR_MESSAGE$1 = "장바구니에서 상품의 수량을 조절하던 중 에러가 발생했습니다.";
 const patchCartItem = async ({ cartId, quantity }) => {
   const response = await httpClient.patch(`/cart-items/${cartId}`, {
     id: cartId,
     quantity
   });
   if (!response.ok)
-    throw new Error(ERROR_MESSAGE);
+    throw new Error(ERROR_MESSAGE$1);
 };
 const useCartOperations = () => {
   const dispatch = reactExports.useContext(CartDispatchContext);
@@ -15508,7 +15528,10 @@ const useCartOperations = () => {
         ...item,
         selected: cartItemSelectionStorage.isItemSelected(item.id) || INITIAL_SELECTED
       }));
-      dispatch({ type: "REPLACE_ITEMS", items: itemsWithSelection });
+      dispatch({
+        type: CART_ACTION_TYPES.REPLACE_ITEMS,
+        items: itemsWithSelection
+      });
     } catch (error) {
       handleError(error);
     }
@@ -15571,14 +15594,29 @@ const FilledCheckbox = "/react-shopping-cart/filled-check.svg";
 const Checkbox$1 = newStyled.div`
   width: 24px;
   height: 24px;
-  cursor: pointer;
+  cursor: ${({ $disabled }) => $disabled ? "default" : "pointer"};
 
-  &:active {
-    transform: scale(0.95);
-  }
+  ${({ $disabled }) => !$disabled && css`
+      &:active {
+        transform: scale(0.95);
+      }
+    `}
+
+  ${({ $disabled }) => $disabled && css`
+      opacity: 0.8;
+    `}
 `;
-const Checkbox = ({ selected, onClick, ...props }) => {
-  return /* @__PURE__ */ jsxRuntimeExports.jsx(Checkbox$1, { onClick, ...props, children: selected ? /* @__PURE__ */ jsxRuntimeExports.jsx("img", { src: FilledCheckbox, alt: "filled-checkbox" }) : /* @__PURE__ */ jsxRuntimeExports.jsx("img", { src: EmptyCheckbox, alt: "empty-checkbox" }) });
+const Checkbox = ({ selected, onClick, disabled = false, ...props }) => {
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(
+    Checkbox$1,
+    {
+      $disabled: disabled,
+      tabIndex: disabled ? -1 : 0,
+      onClick: () => !disabled && onClick(),
+      ...props,
+      children: selected ? /* @__PURE__ */ jsxRuntimeExports.jsx("img", { src: FilledCheckbox, alt: "filled-checkbox" }) : /* @__PURE__ */ jsxRuntimeExports.jsx("img", { src: EmptyCheckbox, alt: "empty-checkbox" })
+    }
+  );
 };
 const AllSelector$1 = newStyled.div`
   display: flex;
@@ -15741,10 +15779,7 @@ const CartItem = ({ item: { id: id2, quantity, product, selected } }) => {
       /* @__PURE__ */ jsxRuntimeExports.jsx(CartItemImage, { $url: product.imageUrl }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs(CartItemInfo, { children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx(CartItemName, { children: product.name }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs(CartItemPrice, { children: [
-          product.price.toLocaleString(),
-          "원"
-        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(CartItemPrice, { children: formatCurrency(product.price) }),
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           QuantityCounter,
           {
@@ -15765,6 +15800,260 @@ const CartInitializer = () => {
     fetchData();
   }, [fetchData]);
   return null;
+};
+const FREE_SHIPPING_THRESHOLD = 1e5;
+const DEFAULT_SHIPPING_FEE = 3e3;
+const ERROR_MESSAGE = "쿠폰 정보를 가져오는 데 실패했습니다.";
+const getCoupons = async () => {
+  const response = await httpClient.get(`/coupons`);
+  if (!response.ok)
+    throw new Error(ERROR_MESSAGE);
+  return await response.json();
+};
+const useCouponFetch = () => {
+  const [coupons, setCoupons] = reactExports.useState([]);
+  const { handleError } = useErrorHandler();
+  const fetchData = reactExports.useCallback(async () => {
+    try {
+      setCoupons(await getCoupons());
+    } catch (error) {
+      handleError(error);
+    }
+  }, [handleError]);
+  return { coupons, fetchData };
+};
+const MAX_COUPON_SELECTION = 2;
+const useCouponSelection = (coupons) => {
+  const [selectedCouponIds, setSelectedCouponIds] = reactExports.useState([]);
+  const { showToast } = useToast();
+  const toggleCouponSelection = reactExports.useCallback(
+    (couponId) => {
+      setSelectedCouponIds((prev2) => {
+        if (prev2.includes(couponId)) {
+          return prev2.filter((id2) => id2 !== couponId);
+        }
+        if (prev2.length >= MAX_COUPON_SELECTION) {
+          showToast({
+            message: `쿠폰은 최대 ${MAX_COUPON_SELECTION}개까지 적용 가능합니다.`,
+            type: "error"
+          });
+          return prev2;
+        }
+        return [...prev2, couponId];
+      });
+    },
+    [showToast]
+  );
+  const selectedCoupons = reactExports.useMemo(
+    () => coupons.filter((coupon) => selectedCouponIds.includes(coupon.id)),
+    [coupons, selectedCouponIds]
+  );
+  const hasNoSelectedCoupons = reactExports.useMemo(
+    () => selectedCouponIds.length === 0,
+    [selectedCouponIds.length]
+  );
+  const isCouponSelected = reactExports.useCallback(
+    (id2) => selectedCouponIds.includes(id2),
+    [selectedCouponIds]
+  );
+  return {
+    selectedCoupons,
+    hasNoSelectedCoupons,
+    toggleCouponSelection,
+    isCouponSelected
+  };
+};
+const CouponContext = reactExports.createContext(null);
+const CouponProvider = ({ children }) => {
+  const { coupons, fetchData } = useCouponFetch();
+  const {
+    selectedCoupons,
+    hasNoSelectedCoupons,
+    toggleCouponSelection,
+    isCouponSelected
+  } = useCouponSelection(coupons);
+  const contextValue = reactExports.useMemo(
+    () => ({
+      coupons,
+      fetchData,
+      selectedCoupons,
+      hasNoSelectedCoupons,
+      toggleCouponSelection,
+      isCouponSelected
+    }),
+    [
+      coupons,
+      fetchData,
+      selectedCoupons,
+      hasNoSelectedCoupons,
+      toggleCouponSelection,
+      isCouponSelected
+    ]
+  );
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(CouponContext.Provider, { value: contextValue, children });
+};
+function useCoupon() {
+  const context = reactExports.useContext(CouponContext);
+  if (!context)
+    throw new Error("useCoupon must be used within CouponProvider");
+  return context;
+}
+function useCouponSelector(selector) {
+  const context = useCoupon();
+  return reactExports.useMemo(() => selector(context), [context, selector]);
+}
+const calculateFixedDiscount = (coupon, orderPrice) => {
+  if (coupon.discountType !== "fixed" || !coupon.discount)
+    return 0;
+  if (coupon.minimumAmount && orderPrice < coupon.minimumAmount)
+    return 0;
+  return coupon.discount;
+};
+const calculatePercentageDiscount = (coupon, orderPrice) => {
+  if (coupon.discountType !== "percentage" || !coupon.discount)
+    return 0;
+  if (coupon.minimumAmount && orderPrice < coupon.minimumAmount)
+    return 0;
+  return Math.floor(orderPrice * (coupon.discount / 100));
+};
+const calculateBuyXGetYDiscount = (coupon, items) => {
+  if (coupon.discountType !== "buyXgetY")
+    return 0;
+  const buyQuantity = coupon.buyQuantity || 2;
+  const getQuantity = coupon.getQuantity || 1;
+  const setSize = buyQuantity + getQuantity;
+  const eligibleItems = items.filter((item) => item.quantity >= setSize).sort((a, b2) => b2.product.price - a.product.price);
+  if (eligibleItems.length === 0)
+    return 0;
+  const highestPriceItem = eligibleItems[0];
+  const freeItemCount = Math.floor(highestPriceItem.quantity / setSize);
+  return highestPriceItem.product.price * freeItemCount;
+};
+const calculateShippingDiscount = (coupon, orderPrice, shippingFee) => {
+  if (coupon.discountType !== "freeShipping")
+    return 0;
+  if (coupon.minimumAmount && orderPrice < coupon.minimumAmount)
+    return 0;
+  return shippingFee;
+};
+const useCouponDiscount = ({
+  coupons,
+  orderItems,
+  orderPrice,
+  shippingFee
+}) => {
+  const calculateCouponDiscount = reactExports.useMemo(() => {
+    return (coupon) => {
+      switch (coupon.discountType) {
+        case "fixed":
+          return calculateFixedDiscount(coupon, orderPrice);
+        case "percentage":
+          return calculatePercentageDiscount(coupon, orderPrice);
+        case "buyXgetY":
+          return calculateBuyXGetYDiscount(coupon, orderItems);
+        case "freeShipping":
+          return calculateShippingDiscount(coupon, orderPrice, shippingFee);
+        default:
+          return 0;
+      }
+    };
+  }, [orderItems, orderPrice, shippingFee]);
+  const optimalTotalDiscount = reactExports.useMemo(() => {
+    if (coupons.length === 0)
+      return 0;
+    if (coupons.length === 1)
+      return calculateCouponDiscount(coupons[0]);
+    if (coupons.length === 2) {
+      const [couponA, couponB] = coupons;
+      const applyCoupon = (coupon, currentPrice, currentShipping) => {
+        switch (coupon.discountType) {
+          case "fixed":
+            return calculateFixedDiscount(coupon, currentPrice);
+          case "percentage":
+            return calculatePercentageDiscount(coupon, currentPrice);
+          case "buyXgetY":
+            return calculateBuyXGetYDiscount(coupon, orderItems);
+          case "freeShipping":
+            return calculateShippingDiscount(
+              coupon,
+              currentPrice,
+              currentShipping
+            );
+          default:
+            return 0;
+        }
+      };
+      const calculateDiscountChain = (first, second) => {
+        const firstDiscount = calculateCouponDiscount(first);
+        const remainingPrice = Math.max(0, orderPrice - firstDiscount);
+        const shippingAfterFirst = first.discountType === "freeShipping" ? 0 : shippingFee;
+        const secondDiscount = applyCoupon(
+          second,
+          remainingPrice,
+          shippingAfterFirst
+        );
+        return firstDiscount + secondDiscount;
+      };
+      const discountAB = calculateDiscountChain(couponA, couponB);
+      const discountBA = calculateDiscountChain(couponB, couponA);
+      return Math.max(discountAB, discountBA);
+    }
+    return 0;
+  }, [coupons, calculateCouponDiscount, orderItems, orderPrice, shippingFee]);
+  return { totalDiscount: optimalTotalDiscount };
+};
+const filterSelectedItems = (items) => {
+  return items.filter((item) => item.selected);
+};
+const calculateOrderQuantity = (items) => {
+  return items.reduce((total, item) => total + item.quantity, 0);
+};
+const calculateOrderPrice = (items) => {
+  return items.reduce(
+    (total, item) => total + item.quantity * item.product.price,
+    0
+  );
+};
+const calculateShippingFee = (orderPrice) => {
+  if (orderPrice === 0)
+    return 0;
+  return orderPrice >= FREE_SHIPPING_THRESHOLD ? 0 : DEFAULT_SHIPPING_FEE;
+};
+const useOrderSummary = ({ isRemoteArea = false } = {}) => {
+  const items = useCartSelector((state) => state.items);
+  const { selectedCoupons } = useCoupon();
+  const orderCalculation = reactExports.useMemo(() => {
+    const orderItems = filterSelectedItems(items);
+    const orderQuantity = calculateOrderQuantity(orderItems);
+    const orderPrice = calculateOrderPrice(orderItems);
+    const baseShippingFee = calculateShippingFee(orderPrice);
+    const remoteAreaFee = isRemoteArea ? 3e3 : 0;
+    const finalShippingFee = baseShippingFee + remoteAreaFee;
+    const baseTotalPrice = orderPrice + baseShippingFee;
+    return {
+      orderItems,
+      orderItemCount: orderItems.length,
+      hasSelectedItem: orderItems.length > 0,
+      orderQuantity,
+      orderPrice,
+      baseShippingFee,
+      remoteAreaFee,
+      finalShippingFee,
+      baseTotalPrice
+    };
+  }, [items, isRemoteArea]);
+  const { totalDiscount } = useCouponDiscount({
+    coupons: selectedCoupons,
+    orderItems: orderCalculation.orderItems,
+    orderPrice: orderCalculation.orderPrice,
+    shippingFee: orderCalculation.finalShippingFee
+  });
+  const finalTotalPrice = Math.max(0, orderCalculation.orderPrice - totalDiscount) + orderCalculation.finalShippingFee;
+  return {
+    ...orderCalculation,
+    totalDiscount,
+    finalTotalPrice
+  };
 };
 const Main$2 = newStyled.div`
   display: flex;
@@ -15820,42 +16109,9 @@ const PriceInfoWrapper$1 = newStyled.div`
   padding-top: 12px;
 `;
 const InfoIcon = "/react-shopping-cart/info.svg";
-const FREE_SHIPPING_THRESHOLD = 1e5;
-const DEFAULT_SHIPPING_FEE = 3e3;
-const useOrderCalculator = () => {
-  const items = useCartSelector((state) => state.items);
-  const orderItems = reactExports.useMemo(
-    () => items.filter((item) => item.selected),
-    [items]
-  );
-  const { orderQuantity, orderPrice } = reactExports.useMemo(() => {
-    return orderItems.reduce(
-      (acc, item) => ({
-        orderQuantity: acc.orderQuantity + item.quantity,
-        orderPrice: acc.orderPrice + item.quantity * item.product.price
-      }),
-      { orderQuantity: 0, orderPrice: 0 }
-    );
-  }, [orderItems]);
-  const shippingFee = reactExports.useMemo(() => {
-    if (orderPrice === 0)
-      return 0;
-    return orderPrice >= FREE_SHIPPING_THRESHOLD ? 0 : DEFAULT_SHIPPING_FEE;
-  }, [orderPrice]);
-  const totalPrice = orderPrice + shippingFee;
-  return {
-    orderItems,
-    orderItemCount: orderItems.length,
-    hasSelectedItem: orderItems.length > 0,
-    orderQuantity,
-    orderPrice,
-    shippingFee,
-    totalPrice
-  };
-};
 const CartPage = () => {
   const { items, cartItemCount } = useCartState();
-  const { hasSelectedItem, orderPrice, shippingFee, totalPrice } = useOrderCalculator();
+  const { hasSelectedItem, orderPrice, baseShippingFee, baseTotalPrice } = useOrderSummary();
   const navigate = useNavigate();
   const navigateToOrderPage = () => {
     navigate(ROUTES.ORDER);
@@ -15877,14 +16133,18 @@ const CartPage = () => {
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs(InfoContainer$2, { children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("img", { src: InfoIcon, alt: "info" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx(Description, { children: "총 주문 금액이 100,000원 이상일 경우 무료 배송됩니다." })
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(Description, { children: [
+            "총 주문 금액이 ",
+            formatCurrency(FREE_SHIPPING_THRESHOLD),
+            "이상일 경우 무료 배송됩니다."
+          ] })
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs(PriceSummary$1, { children: [
           /* @__PURE__ */ jsxRuntimeExports.jsxs(PriceInfoWrapper$1, { children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx(PriceInfo, { label: "주문 금액", price: orderPrice }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(PriceInfo, { label: "배송비", price: shippingFee })
+            /* @__PURE__ */ jsxRuntimeExports.jsx(PriceInfo, { label: "배송비", price: baseShippingFee })
           ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx(PriceInfoWrapper$1, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(PriceInfo, { label: "총 결제 금액", price: totalPrice }) })
+          /* @__PURE__ */ jsxRuntimeExports.jsx(PriceInfoWrapper$1, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(PriceInfo, { label: "총 결제 금액", price: baseTotalPrice }) })
         ] })
       ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx(EmptyFallback, {})
     ] }),
@@ -15902,46 +16162,31 @@ const CartPage = () => {
 const Header = ({ children }) => {
   return /* @__PURE__ */ jsxRuntimeExports.jsx(Header$1, { children });
 };
-const coupons = [
-  {
-    id: 1,
-    code: "FIXED5000",
-    description: "5,000원 할인 쿠폰",
-    expirationDate: "2025-11-30",
-    discount: 5e3,
-    minimumAmount: 1e5,
-    discountType: "fixed"
-  },
-  {
-    id: 2,
-    code: "BOGO",
-    description: "2개 구매 시 1개 무료 쿠폰",
-    expirationDate: "2025-06-30",
-    buyQuantity: 2,
-    getQuantity: 1,
-    discountType: "buyXgetY"
-  },
-  {
-    id: 3,
-    code: "FREESHIPPING",
-    description: "5만원 이상 구매 시 무료 배송 쿠폰",
-    expirationDate: "2025-08-31",
-    minimumAmount: 5e4,
-    discountType: "freeShipping"
-  },
-  {
-    id: 4,
-    code: "MIRACLESALE",
-    description: "미라클모닝 30% 할인 쿠폰",
-    expirationDate: "2025-07-31",
-    discount: 30,
-    availableTime: {
-      start: "04:00:00",
-      end: "07:00:00"
-    },
-    discountType: "percentage"
-  }
-];
+const useCouponValidation = (calculator) => {
+  const now = /* @__PURE__ */ new Date();
+  const currentDate = now.toISOString().split("T")[0];
+  const currentTime = now.toTimeString().substring(0, 8);
+  const validateCoupon = reactExports.useMemo(() => {
+    return (coupon) => {
+      const isNotExpired = coupon.expirationDate >= currentDate;
+      if (!isNotExpired)
+        return false;
+      const meetsMinimumAmount = !coupon.minimumAmount || calculator.orderPrice >= coupon.minimumAmount;
+      if (!meetsMinimumAmount)
+        return false;
+      if (coupon.availableTime) {
+        const { start, end } = coupon.availableTime;
+        const isWithinTimeRange = currentTime >= start && currentTime <= end;
+        if (!isWithinTimeRange)
+          return false;
+      }
+      return true;
+    };
+  }, [currentDate, currentTime, calculator.orderPrice]);
+  return {
+    validateCoupon
+  };
+};
 const useModal = () => {
   const context = reactExports.useContext(ModalContext);
   if (!context) {
@@ -15949,7 +16194,7 @@ const useModal = () => {
   }
   return context;
 };
-const CouponItem$1 = newStyled.div`
+const CouponCard$1 = newStyled.div`
   width: 100%;
   height: 83px;
   padding-top: 12px;
@@ -15958,10 +16203,14 @@ const CouponItem$1 = newStyled.div`
   flex-direction: column;
   gap: 14px;
 `;
-const CouponItemHeader = newStyled.div`
+const CouponCardHeader = newStyled.div`
   display: flex;
   gap: 8px;
   line-height: 27px;
+
+  ${({ $disabled }) => $disabled && css`
+      opacity: 0.3;
+    `}
 `;
 const Title$1 = newStyled.p`
   font-weight: 700;
@@ -15973,29 +16222,40 @@ const CouponInfo = newStyled.div`
   gap: 8px;
   font-weight: 500;
   font-size: 14px;
+
+  ${({ $disabled }) => $disabled && css`
+      opacity: 0.3;
+    `}
 `;
-const CouponItem = ({ item }) => {
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs(CouponItem$1, { children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsxs(CouponItemHeader, { children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx(Checkbox, { selected: false, onClick: () => {
-      } }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(Title$1, { children: item.description })
+const CouponCard = ({ coupon, enable, selected, onToggle }) => {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(CouponCard$1, { children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs(CouponCardHeader, { $disabled: !enable, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        Checkbox,
+        {
+          selected,
+          onClick: () => enable && onToggle(coupon.id),
+          disabled: !enable
+        }
+      ),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(Title$1, { children: coupon.description })
     ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs(CouponInfo, { children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs(CouponInfo, { $disabled: !enable, children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { children: [
         "만료일: ",
-        item.expirationDate
+        formatDate(coupon.expirationDate)
       ] }),
-      item.minimumAmount && /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { children: [
+      coupon.minimumAmount && /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { children: [
         "최소 주문 금액: ",
-        item.minimumAmount.toLocaleString(),
-        "원"
+        formatCurrency(coupon.minimumAmount)
       ] }),
-      item.availableTime && /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { children: [
-        "사용 가능 시간: ",
-        item.availableTime.start,
-        "-",
-        item.availableTime.end
+      coupon.availableTime && /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { children: [
+        "사용 가능 시간:",
+        " ",
+        formatTimeRange(
+          coupon.availableTime.start,
+          coupon.availableTime.end
+        )
       ] })
     ] })
   ] });
@@ -16058,9 +16318,16 @@ const ApplyCouponButton = newStyled.button`
   }
 `;
 const Close = "/react-shopping-cart/close.svg";
-const price = 6e3;
-const CouponModal = () => {
+const CouponModal = ({ isRemoteArea }) => {
   const { closeModal } = useModal();
+  const { orderPrice, totalDiscount } = useOrderSummary({ isRemoteArea });
+  const { validateCoupon } = useCouponValidation({ orderPrice });
+  const {
+    coupons,
+    toggleCouponSelection,
+    isCouponSelected,
+    hasNoSelectedCoupons
+  } = useCoupon();
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(CouponModal$1, { children: [
     /* @__PURE__ */ jsxRuntimeExports.jsxs(HeaderContainer, { children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx(Title, { children: "쿠폰을 선택해 주세요" }),
@@ -16068,14 +16335,34 @@ const CouponModal = () => {
     ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs(InfoContainer$1, { children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("img", { src: InfoIcon, alt: "info" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(Description, { children: "쿠폰은 최대 2개까지 사용할 수 있습니다." })
+      /* @__PURE__ */ jsxRuntimeExports.jsxs(Description, { children: [
+        "쿠폰은 최대 ",
+        MAX_COUPON_SELECTION,
+        "개까지 사용할 수 있습니다."
+      ] })
     ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx(CouponItemsContainer, { children: coupons.map((item) => /* @__PURE__ */ jsxRuntimeExports.jsx(CouponItem, { item }, item.id)) }),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs(ApplyCouponButton, { onClick: () => closeModal(), children: [
-      "총 ",
-      price.toLocaleString(),
-      "원 할인 쿠폰 사용하기"
-    ] })
+    /* @__PURE__ */ jsxRuntimeExports.jsx(CouponItemsContainer, { children: coupons.map((coupon) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+      CouponCard,
+      {
+        coupon,
+        enable: validateCoupon(coupon),
+        selected: isCouponSelected(coupon.id),
+        onToggle: toggleCouponSelection
+      },
+      coupon.id
+    )) }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+      ApplyCouponButton,
+      {
+        onClick: () => closeModal(),
+        disabled: hasNoSelectedCoupons,
+        children: [
+          "총 ",
+          formatCurrency(totalDiscount),
+          " 할인 쿠폰 사용하기"
+        ]
+      }
+    )
   ] });
 };
 const DEFAULT_IMAGE_URL = "./planet-default-image.svg";
@@ -16120,16 +16407,20 @@ const OrderItem = ({ quantity, product }) => {
     /* @__PURE__ */ jsxRuntimeExports.jsx(OrderItemImage, { $url: product.imageUrl }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs(OrderItemInfo, { children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx(OrderItemName, { children: product.name }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs(OrderItemPrice, { children: [
-        product.price.toLocaleString(),
-        "원"
-      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(OrderItemPrice, { children: formatCurrency(product.price) }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs(OrderItemQuantity, { children: [
         quantity,
         "개"
       ] })
     ] })
   ] });
+};
+const CouponInitializer = () => {
+  const fetchData = useCouponSelector((state) => state.fetchData);
+  reactExports.useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+  return null;
 };
 const Main$1 = newStyled.div`
   display: flex;
@@ -16222,20 +16513,23 @@ const PriceInfoWrapper = newStyled.div`
 `;
 const BackIcon = "/react-shopping-cart/left-arrow.svg";
 const OrderPage = () => {
+  const [isRemoteArea, setIsRemoteArea] = reactExports.useState(false);
   const {
     orderItems,
     orderItemCount,
     orderQuantity,
     orderPrice,
-    shippingFee,
-    totalPrice
-  } = useOrderCalculator();
+    totalDiscount,
+    finalShippingFee,
+    finalTotalPrice
+  } = useOrderSummary({ isRemoteArea });
   const { openModal } = useModal();
-  const openCouponModal = () => openModal(/* @__PURE__ */ jsxRuntimeExports.jsx(CouponModal, {}));
+  const openCouponModal = () => openModal(/* @__PURE__ */ jsxRuntimeExports.jsx(CouponModal, { isRemoteArea: true }));
   const navigate = useNavigate();
   const navigateToCart = () => navigate(ROUTES.CART);
   const navigateToPayment = () => navigate(ROUTES.PAYMENT);
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx(CouponInitializer, {}),
     /* @__PURE__ */ jsxRuntimeExports.jsx(Header, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(
       BackIcon$1,
       {
@@ -16271,22 +16565,38 @@ const OrderPage = () => {
         /* @__PURE__ */ jsxRuntimeExports.jsxs(ShippingInfoContainer, { children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx(ShippingLabel, { children: "배송 정보" }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs(ShippingSurchargeContainer, { children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx(Checkbox, { selected: false, onClick: () => {
-            } }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              Checkbox,
+              {
+                selected: isRemoteArea,
+                onClick: () => setIsRemoteArea((prev2) => !prev2)
+              }
+            ),
             /* @__PURE__ */ jsxRuntimeExports.jsx(Description, { children: "제주도 및 도서 산간 지역" })
           ] })
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs(InfoContainer, { children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("img", { src: InfoIcon, alt: "info" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx(Description, { children: "총 주문 금액이 100,000원 이상일 경우 무료 배송됩니다." })
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(Description, { children: [
+            "총 주문 금액이 ",
+            formatCurrency(FREE_SHIPPING_THRESHOLD),
+            " 이상일 경우 무료 배송됩니다."
+          ] })
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs(PriceSummary, { children: [
           /* @__PURE__ */ jsxRuntimeExports.jsxs(PriceInfoWrapper, { children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx(PriceInfo, { label: "주문 금액", price: orderPrice }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(PriceInfo, { label: "쿠폰 할인 금액", price: 0, isNegative: true }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(PriceInfo, { label: "배송비", price: shippingFee })
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              PriceInfo,
+              {
+                label: "쿠폰 할인 금액",
+                price: totalDiscount,
+                isNegative: true
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(PriceInfo, { label: "배송비", price: finalShippingFee })
           ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx(PriceInfoWrapper, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(PriceInfo, { label: "총 결제 금액", price: totalPrice }) })
+          /* @__PURE__ */ jsxRuntimeExports.jsx(PriceInfoWrapper, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(PriceInfo, { label: "총 결제 금액", price: finalTotalPrice }) })
         ] })
       ] })
     ] }),
@@ -16330,7 +16640,7 @@ const Price = newStyled.div`
   font-size: 26px;
 `;
 const PaymentPage = () => {
-  const { orderItemCount, orderQuantity, totalPrice } = useOrderCalculator();
+  const { orderItemCount, orderQuantity, finalTotalPrice } = useOrderSummary();
   const navigate = useNavigate();
   const navigateToCart = () => navigate(ROUTES.CART);
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
@@ -16349,17 +16659,14 @@ const PaymentPage = () => {
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs(PriceContainer, { children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx(Label, { children: "총 결제 금액" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs(Price, { children: [
-          totalPrice.toLocaleString(),
-          "원"
-        ] })
+        /* @__PURE__ */ jsxRuntimeExports.jsx(Price, { children: formatCurrency(finalTotalPrice) })
       ] })
     ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsx(FooterButton, { onClick: navigateToCart, children: "장바구니로 돌아가기" })
   ] });
 };
 const Layout = () => {
-  return /* @__PURE__ */ jsxRuntimeExports.jsx(MobileLayout, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(ToastProvider, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(CartProvider, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(ModalProvider, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(Outlet, {}) }) }) }) });
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(MobileLayout, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(ToastProvider, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(CartProvider, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(CouponProvider, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(ModalProvider, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(Outlet, {}) }) }) }) }) });
 };
 const router = createBrowserRouter(
   [
@@ -16382,7 +16689,7 @@ const App = () => {
 };
 async function enableMocking() {
   {
-    const { worker } = await __vitePreload(() => import("./browser-D7d3FGO4.js"), true ? [] : void 0);
+    const { worker } = await __vitePreload(() => import("./browser-qMT1YSWi.js"), true ? [] : void 0);
     return worker.start({
       serviceWorker: {
         url: `${window.location.origin}${CLIENT_BASE_PATH}mockServiceWorker.js`,
@@ -16398,6 +16705,5 @@ enableMocking().then(
   )
 );
 export {
-  API_BASE_URL as A,
-  coupons as c
+  API_BASE_URL as A
 };

@@ -27,7 +27,7 @@ var __privateMethod = (obj, member, method) => {
   return method;
 };
 var _executor, _decorate, decorate_fn, _a2, _executor2, _decorate2, decorate_fn2, _b2, _c2;
-import { A as API_BASE_URL, c as coupons } from "./index-CsPNkrJx.js";
+import { A as API_BASE_URL } from "./index-B48NlPzj.js";
 var POSITIONALS_EXP$1 = /(%?)(%([sdijo]))/g;
 function serializePositional$1(positional, flag) {
   switch (flag) {
@@ -18945,9 +18945,49 @@ const content = [
 const cartItems = {
   content
 };
+const coupons = [
+  {
+    id: 1,
+    code: "FIXED5000",
+    description: "5,000원 할인 쿠폰",
+    expirationDate: "2025-11-30",
+    discount: 5e3,
+    minimumAmount: 1e5,
+    discountType: "fixed"
+  },
+  {
+    id: 2,
+    code: "BOGO",
+    description: "2개 구매 시 1개 무료 쿠폰",
+    expirationDate: "2025-06-30",
+    buyQuantity: 2,
+    getQuantity: 1,
+    discountType: "buyXgetY"
+  },
+  {
+    id: 3,
+    code: "FREESHIPPING",
+    description: "5만원 이상 구매 시 무료 배송 쿠폰",
+    expirationDate: "2025-08-31",
+    minimumAmount: 5e4,
+    discountType: "freeShipping"
+  },
+  {
+    id: 4,
+    code: "MIRACLESALE",
+    description: "미라클모닝 30% 할인 쿠폰",
+    expirationDate: "2025-07-31",
+    discount: 30,
+    availableTime: {
+      start: "04:00:00",
+      end: "07:00:00"
+    },
+    discountType: "percentage"
+  }
+];
 const END_POINT = {
   CART_ITEMS: "/cart-items",
-  COUPONS: "coupons"
+  COUPONS: "/coupons"
 };
 const currentCartItems = { ...cartItems };
 const handlers = [
