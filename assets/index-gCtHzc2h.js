@@ -15575,14 +15575,14 @@ const useCartToggle = () => {
   const toggleAllSelected = () => {
     const cartIds = state.items.map(({ id: id2 }) => id2);
     cartItemSelectionStorage.setAllSelections(cartIds, !state.allSelected);
-    dispatch({ type: "TOGGLE_ALL_SELECTED" });
+    dispatch({ type: CART_ACTION_TYPES.TOGGLE_ALL_SELECTED });
   };
   const toggleItemSelected = (cartId) => {
     const targetItem = state.items.find((item) => item.id === cartId);
     if (targetItem) {
       cartItemSelectionStorage.setSelection(cartId, !targetItem.selected);
     }
-    dispatch({ type: "TOGGLE_ITEM_SELECTED", id: cartId });
+    dispatch({ type: CART_ACTION_TYPES.TOGGLE_ITEM_SELECTED, id: cartId });
   };
   return {
     toggleAllSelected,
@@ -15614,7 +15614,7 @@ const Checkbox = ({ selected, onClick, disabled = false, ...props }) => {
       tabIndex: disabled ? -1 : 0,
       onClick: () => !disabled && onClick(),
       ...props,
-      children: selected ? /* @__PURE__ */ jsxRuntimeExports.jsx("img", { src: FilledCheckbox, alt: "filled-checkbox" }) : /* @__PURE__ */ jsxRuntimeExports.jsx("img", { src: EmptyCheckbox, alt: "empty-checkbox" })
+      children: selected && !disabled ? /* @__PURE__ */ jsxRuntimeExports.jsx("img", { src: FilledCheckbox, alt: "filled-checkbox" }) : /* @__PURE__ */ jsxRuntimeExports.jsx("img", { src: EmptyCheckbox, alt: "empty-checkbox" })
     }
   );
 };
@@ -15803,6 +15803,102 @@ const CartInitializer = () => {
 };
 const FREE_SHIPPING_THRESHOLD = 1e5;
 const DEFAULT_SHIPPING_FEE = 3e3;
+const calculateBuyXGetYDiscount = (coupon, items) => {
+  if (coupon.discountType !== "buyXgetY")
+    return 0;
+  const buyQuantity = coupon.buyQuantity || 2;
+  const getQuantity = coupon.getQuantity || 1;
+  const setSize = buyQuantity + getQuantity;
+  const eligibleItems = items.filter((item) => item.quantity >= setSize).sort((a, b2) => b2.product.price - a.product.price);
+  if (eligibleItems.length === 0)
+    return 0;
+  const highestPriceItem = eligibleItems[0];
+  const freeItemCount = Math.floor(highestPriceItem.quantity / setSize);
+  return highestPriceItem.product.price * freeItemCount;
+};
+const calculateFixedDiscount = (coupon, orderPrice) => {
+  if (coupon.discountType !== "fixed" || !coupon.discount)
+    return 0;
+  if (coupon.minimumAmount && orderPrice < coupon.minimumAmount)
+    return 0;
+  return coupon.discount;
+};
+const calculateShippingDiscount = (coupon, orderPrice, shippingFee) => {
+  if (coupon.discountType !== "freeShipping")
+    return 0;
+  if (coupon.minimumAmount && orderPrice < coupon.minimumAmount)
+    return 0;
+  return shippingFee;
+};
+const calculatePercentageDiscount = (coupon, orderPrice) => {
+  if (coupon.discountType !== "percentage" || !coupon.discount)
+    return 0;
+  if (coupon.minimumAmount && orderPrice < coupon.minimumAmount)
+    return 0;
+  return Math.floor(orderPrice * (coupon.discount / 100));
+};
+const calculateCouponDiscount = (coupon, orderItems, orderPrice, shippingFee) => {
+  switch (coupon.discountType) {
+    case "fixed":
+      return calculateFixedDiscount(coupon, orderPrice);
+    case "percentage":
+      return calculatePercentageDiscount(coupon, orderPrice);
+    case "buyXgetY":
+      return calculateBuyXGetYDiscount(coupon, orderItems);
+    case "freeShipping":
+      return calculateShippingDiscount(coupon, orderPrice, shippingFee);
+    default:
+      return 0;
+  }
+};
+const calculateDiscountChain = (first, second, orderItems, orderPrice, shippingFee) => {
+  const firstDiscount = calculateCouponDiscount(
+    first,
+    orderItems,
+    orderPrice,
+    shippingFee
+  );
+  const remainingPrice = Math.max(0, orderPrice - firstDiscount);
+  const shippingAfterFirst = first.discountType === "freeShipping" ? 0 : shippingFee;
+  const secondDiscount = calculateCouponDiscount(
+    second,
+    orderItems,
+    remainingPrice,
+    shippingAfterFirst
+  );
+  return firstDiscount + secondDiscount;
+};
+const calculateOptimalTotalDiscount = (coupons, orderItems, orderPrice, shippingFee) => {
+  if (coupons.length === 0)
+    return 0;
+  if (coupons.length === 1) {
+    return calculateCouponDiscount(
+      coupons[0],
+      orderItems,
+      orderPrice,
+      shippingFee
+    );
+  }
+  if (coupons.length === 2) {
+    const [couponA, couponB] = coupons;
+    const discountAB = calculateDiscountChain(
+      couponA,
+      couponB,
+      orderItems,
+      orderPrice,
+      shippingFee
+    );
+    const discountBA = calculateDiscountChain(
+      couponB,
+      couponA,
+      orderItems,
+      orderPrice,
+      shippingFee
+    );
+    return Math.max(discountAB, discountBA);
+  }
+  return 0;
+};
 const ERROR_MESSAGE = "쿠폰 정보를 가져오는 데 실패했습니다.";
 const getCoupons = async () => {
   const response = await httpClient.get(`/coupons`);
@@ -15856,11 +15952,15 @@ const useCouponSelection = (coupons) => {
     (id2) => selectedCouponIds.includes(id2),
     [selectedCouponIds]
   );
+  const resetSelectedCoupons = reactExports.useCallback(() => {
+    setSelectedCouponIds([]);
+  }, [setSelectedCouponIds]);
   return {
     selectedCoupons,
     hasNoSelectedCoupons,
     toggleCouponSelection,
-    isCouponSelected
+    isCouponSelected,
+    resetSelectedCoupons
   };
 };
 const CouponContext = reactExports.createContext(null);
@@ -15870,7 +15970,8 @@ const CouponProvider = ({ children }) => {
     selectedCoupons,
     hasNoSelectedCoupons,
     toggleCouponSelection,
-    isCouponSelected
+    isCouponSelected,
+    resetSelectedCoupons
   } = useCouponSelection(coupons);
   const contextValue = reactExports.useMemo(
     () => ({
@@ -15879,7 +15980,8 @@ const CouponProvider = ({ children }) => {
       selectedCoupons,
       hasNoSelectedCoupons,
       toggleCouponSelection,
-      isCouponSelected
+      isCouponSelected,
+      resetSelectedCoupons
     }),
     [
       coupons,
@@ -15887,7 +15989,8 @@ const CouponProvider = ({ children }) => {
       selectedCoupons,
       hasNoSelectedCoupons,
       toggleCouponSelection,
-      isCouponSelected
+      isCouponSelected,
+      resetSelectedCoupons
     ]
   );
   return /* @__PURE__ */ jsxRuntimeExports.jsx(CouponContext.Provider, { value: contextValue, children });
@@ -15902,106 +16005,6 @@ function useCouponSelector(selector) {
   const context = useCoupon();
   return reactExports.useMemo(() => selector(context), [context, selector]);
 }
-const calculateFixedDiscount = (coupon, orderPrice) => {
-  if (coupon.discountType !== "fixed" || !coupon.discount)
-    return 0;
-  if (coupon.minimumAmount && orderPrice < coupon.minimumAmount)
-    return 0;
-  return coupon.discount;
-};
-const calculatePercentageDiscount = (coupon, orderPrice) => {
-  if (coupon.discountType !== "percentage" || !coupon.discount)
-    return 0;
-  if (coupon.minimumAmount && orderPrice < coupon.minimumAmount)
-    return 0;
-  return Math.floor(orderPrice * (coupon.discount / 100));
-};
-const calculateBuyXGetYDiscount = (coupon, items) => {
-  if (coupon.discountType !== "buyXgetY")
-    return 0;
-  const buyQuantity = coupon.buyQuantity || 2;
-  const getQuantity = coupon.getQuantity || 1;
-  const setSize = buyQuantity + getQuantity;
-  const eligibleItems = items.filter((item) => item.quantity >= setSize).sort((a, b2) => b2.product.price - a.product.price);
-  if (eligibleItems.length === 0)
-    return 0;
-  const highestPriceItem = eligibleItems[0];
-  const freeItemCount = Math.floor(highestPriceItem.quantity / setSize);
-  return highestPriceItem.product.price * freeItemCount;
-};
-const calculateShippingDiscount = (coupon, orderPrice, shippingFee) => {
-  if (coupon.discountType !== "freeShipping")
-    return 0;
-  if (coupon.minimumAmount && orderPrice < coupon.minimumAmount)
-    return 0;
-  return shippingFee;
-};
-const useCouponDiscount = ({
-  coupons,
-  orderItems,
-  orderPrice,
-  shippingFee
-}) => {
-  const calculateCouponDiscount = reactExports.useMemo(() => {
-    return (coupon) => {
-      switch (coupon.discountType) {
-        case "fixed":
-          return calculateFixedDiscount(coupon, orderPrice);
-        case "percentage":
-          return calculatePercentageDiscount(coupon, orderPrice);
-        case "buyXgetY":
-          return calculateBuyXGetYDiscount(coupon, orderItems);
-        case "freeShipping":
-          return calculateShippingDiscount(coupon, orderPrice, shippingFee);
-        default:
-          return 0;
-      }
-    };
-  }, [orderItems, orderPrice, shippingFee]);
-  const optimalTotalDiscount = reactExports.useMemo(() => {
-    if (coupons.length === 0)
-      return 0;
-    if (coupons.length === 1)
-      return calculateCouponDiscount(coupons[0]);
-    if (coupons.length === 2) {
-      const [couponA, couponB] = coupons;
-      const applyCoupon = (coupon, currentPrice, currentShipping) => {
-        switch (coupon.discountType) {
-          case "fixed":
-            return calculateFixedDiscount(coupon, currentPrice);
-          case "percentage":
-            return calculatePercentageDiscount(coupon, currentPrice);
-          case "buyXgetY":
-            return calculateBuyXGetYDiscount(coupon, orderItems);
-          case "freeShipping":
-            return calculateShippingDiscount(
-              coupon,
-              currentPrice,
-              currentShipping
-            );
-          default:
-            return 0;
-        }
-      };
-      const calculateDiscountChain = (first, second) => {
-        const firstDiscount = calculateCouponDiscount(first);
-        const remainingPrice = Math.max(0, orderPrice - firstDiscount);
-        const shippingAfterFirst = first.discountType === "freeShipping" ? 0 : shippingFee;
-        const secondDiscount = applyCoupon(
-          second,
-          remainingPrice,
-          shippingAfterFirst
-        );
-        return firstDiscount + secondDiscount;
-      };
-      const discountAB = calculateDiscountChain(couponA, couponB);
-      const discountBA = calculateDiscountChain(couponB, couponA);
-      return Math.max(discountAB, discountBA);
-    }
-    return 0;
-  }, [coupons, calculateCouponDiscount, orderItems, orderPrice, shippingFee]);
-  return { totalDiscount: optimalTotalDiscount };
-};
 const filterSelectedItems = (items) => {
   return items.filter((item) => item.selected);
 };
@@ -16019,38 +16022,50 @@ const calculateShippingFee = (orderPrice) => {
     return 0;
   return orderPrice >= FREE_SHIPPING_THRESHOLD ? 0 : DEFAULT_SHIPPING_FEE;
 };
-const useOrderSummary = ({ isRemoteArea = false } = {}) => {
+const OrderContext = reactExports.createContext(null);
+const OrderProvider = ({ children }) => {
+  const [isRemoteArea, setIsRemoteArea] = reactExports.useState(false);
+  const toggleRemoteArea = () => setIsRemoteArea((prev2) => !prev2);
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(OrderContext.Provider, { value: { isRemoteArea, toggleRemoteArea }, children });
+};
+const useOrder = () => {
+  const context = reactExports.useContext(OrderContext);
+  if (!context)
+    throw new Error("useOrder must be used within an OrderProvider");
+  return context;
+};
+const REMOTE_AREA_ADDITIONAL_FEE = 3e3;
+const useOrderSummary = () => {
   const items = useCartSelector((state) => state.items);
   const { selectedCoupons } = useCoupon();
-  const orderCalculation = reactExports.useMemo(() => {
-    const orderItems = filterSelectedItems(items);
-    const orderQuantity = calculateOrderQuantity(orderItems);
-    const orderPrice = calculateOrderPrice(orderItems);
-    const baseShippingFee = calculateShippingFee(orderPrice);
-    const remoteAreaFee = isRemoteArea ? 3e3 : 0;
-    const finalShippingFee = baseShippingFee + remoteAreaFee;
-    const baseTotalPrice = orderPrice + baseShippingFee;
-    return {
+  const { isRemoteArea } = useOrder();
+  const orderItems = filterSelectedItems(items);
+  const orderQuantity = calculateOrderQuantity(orderItems);
+  const orderPrice = calculateOrderPrice(orderItems);
+  const baseShippingFee = calculateShippingFee(orderPrice);
+  const remoteAreaFee = isRemoteArea ? REMOTE_AREA_ADDITIONAL_FEE : 0;
+  const finalShippingFee = baseShippingFee + remoteAreaFee;
+  const baseTotalPrice = orderPrice + baseShippingFee;
+  const totalDiscount = reactExports.useMemo(
+    () => calculateOptimalTotalDiscount(
+      selectedCoupons,
       orderItems,
-      orderItemCount: orderItems.length,
-      hasSelectedItem: orderItems.length > 0,
-      orderQuantity,
       orderPrice,
-      baseShippingFee,
-      remoteAreaFee,
-      finalShippingFee,
-      baseTotalPrice
-    };
-  }, [items, isRemoteArea]);
-  const { totalDiscount } = useCouponDiscount({
-    coupons: selectedCoupons,
-    orderItems: orderCalculation.orderItems,
-    orderPrice: orderCalculation.orderPrice,
-    shippingFee: orderCalculation.finalShippingFee
-  });
-  const finalTotalPrice = Math.max(0, orderCalculation.orderPrice - totalDiscount) + orderCalculation.finalShippingFee;
+      finalShippingFee
+    ),
+    [selectedCoupons, orderItems, orderPrice, finalShippingFee]
+  );
+  const finalTotalPrice = Math.max(0, orderPrice - totalDiscount) + finalShippingFee;
   return {
-    ...orderCalculation,
+    orderItems,
+    orderItemCount: orderItems.length,
+    hasSelectedItem: orderItems.length > 0,
+    orderQuantity,
+    orderPrice,
+    baseShippingFee,
+    remoteAreaFee,
+    finalShippingFee,
+    baseTotalPrice,
     totalDiscount,
     finalTotalPrice
   };
@@ -16162,30 +16177,20 @@ const CartPage = () => {
 const Header = ({ children }) => {
   return /* @__PURE__ */ jsxRuntimeExports.jsx(Header$1, { children });
 };
-const useCouponValidation = (calculator) => {
-  const now = /* @__PURE__ */ new Date();
-  const currentDate = now.toISOString().split("T")[0];
-  const currentTime = now.toTimeString().substring(0, 8);
-  const validateCoupon = reactExports.useMemo(() => {
-    return (coupon) => {
-      const isNotExpired = coupon.expirationDate >= currentDate;
-      if (!isNotExpired)
-        return false;
-      const meetsMinimumAmount = !coupon.minimumAmount || calculator.orderPrice >= coupon.minimumAmount;
-      if (!meetsMinimumAmount)
-        return false;
-      if (coupon.availableTime) {
-        const { start, end } = coupon.availableTime;
-        const isWithinTimeRange = currentTime >= start && currentTime <= end;
-        if (!isWithinTimeRange)
-          return false;
-      }
-      return true;
-    };
-  }, [currentDate, currentTime, calculator.orderPrice]);
-  return {
-    validateCoupon
-  };
+const validateCoupon = (coupon, orderPrice, currentDate = (/* @__PURE__ */ new Date()).toISOString().split("T")[0], currentTime = (/* @__PURE__ */ new Date()).toTimeString().substring(0, 8)) => {
+  const isNotExpired = coupon.expirationDate >= currentDate;
+  if (!isNotExpired)
+    return false;
+  const meetsMinimumAmount = !coupon.minimumAmount || orderPrice >= coupon.minimumAmount;
+  if (!meetsMinimumAmount)
+    return false;
+  if (coupon.availableTime) {
+    const { start, end } = coupon.availableTime;
+    const isWithinTimeRange = currentTime >= start && currentTime <= end;
+    if (!isWithinTimeRange)
+      return false;
+  }
+  return true;
 };
 const useModal = () => {
   const context = reactExports.useContext(ModalContext);
@@ -16318,10 +16323,9 @@ const ApplyCouponButton = newStyled.button`
   }
 `;
 const Close = "/react-shopping-cart/close.svg";
-const CouponModal = ({ isRemoteArea }) => {
+const CouponModal = () => {
   const { closeModal } = useModal();
-  const { orderPrice, totalDiscount } = useOrderSummary({ isRemoteArea });
-  const { validateCoupon } = useCouponValidation({ orderPrice });
+  const { orderPrice, totalDiscount } = useOrderSummary();
   const {
     coupons,
     toggleCouponSelection,
@@ -16345,7 +16349,7 @@ const CouponModal = ({ isRemoteArea }) => {
       CouponCard,
       {
         coupon,
-        enable: validateCoupon(coupon),
+        enable: validateCoupon(coupon, orderPrice),
         selected: isCouponSelected(coupon.id),
         onToggle: toggleCouponSelection
       },
@@ -16513,7 +16517,8 @@ const PriceInfoWrapper = newStyled.div`
 `;
 const BackIcon = "/react-shopping-cart/left-arrow.svg";
 const OrderPage = () => {
-  const [isRemoteArea, setIsRemoteArea] = reactExports.useState(false);
+  const { isRemoteArea, toggleRemoteArea } = useOrder();
+  const { resetSelectedCoupons } = useCoupon();
   const {
     orderItems,
     orderItemCount,
@@ -16522,12 +16527,15 @@ const OrderPage = () => {
     totalDiscount,
     finalShippingFee,
     finalTotalPrice
-  } = useOrderSummary({ isRemoteArea });
+  } = useOrderSummary();
   const { openModal } = useModal();
-  const openCouponModal = () => openModal(/* @__PURE__ */ jsxRuntimeExports.jsx(CouponModal, { isRemoteArea: true }));
+  const openCouponModal = () => openModal(/* @__PURE__ */ jsxRuntimeExports.jsx(CouponModal, {}));
   const navigate = useNavigate();
   const navigateToCart = () => navigate(ROUTES.CART);
   const navigateToPayment = () => navigate(ROUTES.PAYMENT);
+  reactExports.useEffect(() => {
+    resetSelectedCoupons();
+  }, [resetSelectedCoupons]);
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
     /* @__PURE__ */ jsxRuntimeExports.jsx(CouponInitializer, {}),
     /* @__PURE__ */ jsxRuntimeExports.jsx(Header, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -16565,13 +16573,7 @@ const OrderPage = () => {
         /* @__PURE__ */ jsxRuntimeExports.jsxs(ShippingInfoContainer, { children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx(ShippingLabel, { children: "배송 정보" }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs(ShippingSurchargeContainer, { children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx(
-              Checkbox,
-              {
-                selected: isRemoteArea,
-                onClick: () => setIsRemoteArea((prev2) => !prev2)
-              }
-            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(Checkbox, { selected: isRemoteArea, onClick: toggleRemoteArea }),
             /* @__PURE__ */ jsxRuntimeExports.jsx(Description, { children: "제주도 및 도서 산간 지역" })
           ] })
         ] }),
@@ -16666,7 +16668,7 @@ const PaymentPage = () => {
   ] });
 };
 const Layout = () => {
-  return /* @__PURE__ */ jsxRuntimeExports.jsx(MobileLayout, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(ToastProvider, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(CartProvider, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(CouponProvider, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(ModalProvider, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(Outlet, {}) }) }) }) }) });
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(MobileLayout, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(ToastProvider, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(CartProvider, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(CouponProvider, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(OrderProvider, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(ModalProvider, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(Outlet, {}) }) }) }) }) }) });
 };
 const router = createBrowserRouter(
   [
@@ -16689,7 +16691,7 @@ const App = () => {
 };
 async function enableMocking() {
   {
-    const { worker } = await __vitePreload(() => import("./browser-qMT1YSWi.js"), true ? [] : void 0);
+    const { worker } = await __vitePreload(() => import("./browser-DnmkIs5x.js"), true ? [] : void 0);
     return worker.start({
       serviceWorker: {
         url: `${window.location.origin}${CLIENT_BASE_PATH}mockServiceWorker.js`,
