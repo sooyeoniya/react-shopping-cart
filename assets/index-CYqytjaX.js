@@ -16055,7 +16055,10 @@ const useOrderSummary = () => {
     ),
     [selectedCoupons, orderItems, orderPrice, finalShippingFee]
   );
-  const finalTotalPrice = Math.max(0, orderPrice - totalDiscount) + finalShippingFee;
+  const finalTotalPrice = Math.max(
+    0,
+    orderPrice - totalDiscount + finalShippingFee
+  );
   return {
     orderItems,
     orderItemCount: orderItems.length,
@@ -16648,7 +16651,7 @@ const PaymentPage = () => {
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
     /* @__PURE__ */ jsxRuntimeExports.jsx(Header, {}),
     /* @__PURE__ */ jsxRuntimeExports.jsxs(Main, { children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx(Title$2, { children: "주문 확인" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(Title$2, { children: "결제 확인" }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs(DescriptionContainer, { children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs(Description, { children: [
           "총 ",
@@ -16691,7 +16694,7 @@ const App = () => {
 };
 async function enableMocking() {
   {
-    const { worker } = await __vitePreload(() => import("./browser-DnmkIs5x.js"), true ? [] : void 0);
+    const { worker } = await __vitePreload(() => import("./browser-Czo9Be0l.js"), true ? [] : void 0);
     return worker.start({
       serviceWorker: {
         url: `${window.location.origin}${CLIENT_BASE_PATH}mockServiceWorker.js`,
