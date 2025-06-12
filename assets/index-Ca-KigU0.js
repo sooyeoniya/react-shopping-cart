@@ -15075,10 +15075,9 @@ const cartReducer = (state, action) => {
         allSelected: calculateAllSelected(action.items)
       };
     case CART_ACTION_TYPES.TOGGLE_ALL_SELECTED: {
-      const newSelected = !state.allSelected;
       return {
-        items: state.items.map((i) => ({ ...i, selected: newSelected })),
-        allSelected: newSelected
+        items: state.items.map((i) => ({ ...i, selected: !state.allSelected })),
+        allSelected: !state.allSelected
       };
     }
     case CART_ACTION_TYPES.TOGGLE_ITEM_SELECTED: {
@@ -15149,7 +15148,9 @@ const Modal = ({ open, onClose, children }) => {
   const stopPropagation = (e2) => {
     e2.stopPropagation();
   };
-  return /* @__PURE__ */ jsxRuntimeExports.jsx(jsxRuntimeExports.Fragment, { children: open && /* @__PURE__ */ jsxRuntimeExports.jsx(Portal, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(ModalBackdrop, { onClick: onClose, children: /* @__PURE__ */ jsxRuntimeExports.jsx(ModalContainer, { onClick: stopPropagation, children: /* @__PURE__ */ jsxRuntimeExports.jsx(ModalContent, { children }) }) }) }) });
+  if (!open)
+    return null;
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(Portal, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(ModalBackdrop, { onClick: onClose, children: /* @__PURE__ */ jsxRuntimeExports.jsx(ModalContainer, { onClick: stopPropagation, children: /* @__PURE__ */ jsxRuntimeExports.jsx(ModalContent, { children }) }) }) });
 };
 const ModalContext = reactExports.createContext(null);
 const ModalProvider = ({ children }) => {
@@ -15614,7 +15615,7 @@ const Checkbox = ({ selected, onClick, disabled = false, ...props }) => {
       tabIndex: disabled ? -1 : 0,
       onClick: () => !disabled && onClick(),
       ...props,
-      children: selected && !disabled ? /* @__PURE__ */ jsxRuntimeExports.jsx("img", { src: FilledCheckbox, alt: "filled-checkbox" }) : /* @__PURE__ */ jsxRuntimeExports.jsx("img", { src: EmptyCheckbox, alt: "empty-checkbox" })
+      children: selected ? /* @__PURE__ */ jsxRuntimeExports.jsx("img", { src: FilledCheckbox, alt: "filled-checkbox" }) : /* @__PURE__ */ jsxRuntimeExports.jsx("img", { src: EmptyCheckbox, alt: "empty-checkbox" })
     }
   );
 };
@@ -15631,6 +15632,9 @@ const AllSelector = () => {
     /* @__PURE__ */ jsxRuntimeExports.jsx(Description, { children: "전체 선택" })
   ] });
 };
+const DEFAULT_IMAGE_URL = "./planet-default-image.svg";
+const isValidUrl = (url) => Boolean(url && (url.startsWith("http://") || url.startsWith("https://")));
+const getImageUrl = (url) => isValidUrl(url) ? url : DEFAULT_IMAGE_URL;
 const QuantityCounter$1 = newStyled.div`
   display: flex;
   justify-content: space-between;
@@ -15704,9 +15708,6 @@ const QuantityCounter = ({
     )
   ] });
 };
-const DEFAULT_IMAGE_URL$1 = "./planet-default-image.svg";
-const isValidUrl$1 = (url) => Boolean(url && (url.startsWith("http://") || url.startsWith("https://")));
-const getImageUrl$1 = (url) => isValidUrl$1(url) ? url : DEFAULT_IMAGE_URL$1;
 const CartItem$1 = newStyled.div`
   width: 100%;
   padding-top: 12px;
@@ -15729,7 +15730,7 @@ const CartItemWrapper = newStyled.div`
 const CartItemImage = newStyled.div`
   width: 112px;
   height: 112px;
-  background: no-repeat url(${({ $url }) => getImageUrl$1($url)});
+  background: no-repeat url(${({ $url }) => $url});
   background-size: cover;
   border-radius: 8px;
 `;
@@ -15776,7 +15777,7 @@ const CartItem = ({ item: { id: id2, quantity, product, selected } }) => {
       /* @__PURE__ */ jsxRuntimeExports.jsx(DeleteButton, { onClick: () => deleteItem(id2), children: "삭제" })
     ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs(CartItemWrapper, { children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx(CartItemImage, { $url: product.imageUrl }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(CartItemImage, { $url: getImageUrl(product.imageUrl) }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs(CartItemInfo, { children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx(CartItemName, { children: product.name }),
         /* @__PURE__ */ jsxRuntimeExports.jsx(CartItemPrice, { children: formatCurrency(product.price) }),
@@ -15837,7 +15838,12 @@ const calculatePercentageDiscount = (coupon, orderPrice) => {
     return 0;
   return Math.floor(orderPrice * (coupon.discount / 100));
 };
-const calculateCouponDiscount = (coupon, orderItems, orderPrice, shippingFee) => {
+const calculateCouponDiscount = ({
+  coupon,
+  orderItems,
+  orderPrice,
+  shippingFee
+}) => {
   switch (coupon.discountType) {
     case "fixed":
       return calculateFixedDiscount(coupon, orderPrice);
@@ -15851,53 +15857,66 @@ const calculateCouponDiscount = (coupon, orderItems, orderPrice, shippingFee) =>
       return 0;
   }
 };
-const calculateDiscountChain = (first, second, orderItems, orderPrice, shippingFee) => {
-  const firstDiscount = calculateCouponDiscount(
-    first,
-    orderItems,
-    orderPrice,
-    shippingFee
-  );
-  const remainingPrice = Math.max(0, orderPrice - firstDiscount);
-  const shippingAfterFirst = first.discountType === "freeShipping" ? 0 : shippingFee;
-  const secondDiscount = calculateCouponDiscount(
-    second,
-    orderItems,
-    remainingPrice,
-    shippingAfterFirst
-  );
-  return firstDiscount + secondDiscount;
+const calculateDiscountSequence = ({
+  coupons,
+  orderItems,
+  initialOrderPrice,
+  initialShippingFee
+}) => {
+  return coupons.reduce(
+    (acc, coupon) => {
+      const discount = calculateCouponDiscount({
+        coupon,
+        orderItems,
+        orderPrice: acc.remainingPrice,
+        shippingFee: acc.currentShippingFee
+      });
+      const updatedOrderPrice = Math.max(0, acc.remainingPrice - discount);
+      const updatedShippingFee = coupon.discountType === "freeShipping" ? 0 : acc.currentShippingFee;
+      return {
+        totalDiscount: acc.totalDiscount + discount,
+        remainingPrice: updatedOrderPrice,
+        currentShippingFee: updatedShippingFee
+      };
+    },
+    {
+      totalDiscount: 0,
+      remainingPrice: initialOrderPrice,
+      currentShippingFee: initialShippingFee
+    }
+  ).totalDiscount;
 };
-const calculateOptimalTotalDiscount = (coupons, orderItems, orderPrice, shippingFee) => {
+const getPermutations = (arr) => {
+  if (arr.length <= 1)
+    return [arr];
+  const permutations = [];
+  for (let i = 0; i < arr.length; i++) {
+    const rest = [...arr.slice(0, i), ...arr.slice(i + 1)];
+    const permutationsOfRest = getPermutations(rest);
+    for (const permutation of permutationsOfRest) {
+      permutations.push([arr[i], ...permutation]);
+    }
+  }
+  return permutations;
+};
+const calculateOptimalTotalDiscount = ({
+  coupons,
+  orderItems,
+  orderPrice,
+  shippingFee
+}) => {
   if (coupons.length === 0)
     return 0;
-  if (coupons.length === 1) {
-    return calculateCouponDiscount(
-      coupons[0],
+  const allPermutations = getPermutations(coupons);
+  return allPermutations.reduce((maxDiscount, permutation) => {
+    const currentDiscount = calculateDiscountSequence({
+      coupons: permutation,
       orderItems,
-      orderPrice,
-      shippingFee
-    );
-  }
-  if (coupons.length === 2) {
-    const [couponA, couponB] = coupons;
-    const discountAB = calculateDiscountChain(
-      couponA,
-      couponB,
-      orderItems,
-      orderPrice,
-      shippingFee
-    );
-    const discountBA = calculateDiscountChain(
-      couponB,
-      couponA,
-      orderItems,
-      orderPrice,
-      shippingFee
-    );
-    return Math.max(discountAB, discountBA);
-  }
-  return 0;
+      initialOrderPrice: orderPrice,
+      initialShippingFee: shippingFee
+    });
+    return Math.max(maxDiscount, currentDiscount);
+  }, 0);
 };
 const ERROR_MESSAGE = "쿠폰 정보를 가져오는 데 실패했습니다.";
 const getCoupons = async () => {
@@ -16047,12 +16066,12 @@ const useOrderSummary = () => {
   const finalShippingFee = baseShippingFee + remoteAreaFee;
   const baseTotalPrice = orderPrice + baseShippingFee;
   const totalDiscount = reactExports.useMemo(
-    () => calculateOptimalTotalDiscount(
-      selectedCoupons,
+    () => calculateOptimalTotalDiscount({
+      coupons: selectedCoupons,
       orderItems,
       orderPrice,
-      finalShippingFee
-    ),
+      shippingFee: finalShippingFee
+    }),
     [selectedCoupons, orderItems, orderPrice, finalShippingFee]
   );
   const finalTotalPrice = Math.max(
@@ -16181,8 +16200,8 @@ const Header = ({ children }) => {
   return /* @__PURE__ */ jsxRuntimeExports.jsx(Header$1, { children });
 };
 const validateCoupon = (coupon, orderPrice, currentDate = (/* @__PURE__ */ new Date()).toISOString().split("T")[0], currentTime = (/* @__PURE__ */ new Date()).toTimeString().substring(0, 8)) => {
-  const isNotExpired = coupon.expirationDate >= currentDate;
-  if (!isNotExpired)
+  const isExpired = coupon.expirationDate < currentDate;
+  if (isExpired)
     return false;
   const meetsMinimumAmount = !coupon.minimumAmount || orderPrice >= coupon.minimumAmount;
   if (!meetsMinimumAmount)
@@ -16372,9 +16391,6 @@ const CouponModal = () => {
     )
   ] });
 };
-const DEFAULT_IMAGE_URL = "./planet-default-image.svg";
-const isValidUrl = (url) => Boolean(url && (url.startsWith("http://") || url.startsWith("https://")));
-const getImageUrl = (url) => isValidUrl(url) ? url : DEFAULT_IMAGE_URL;
 const OrderItem$1 = newStyled.div`
   width: 100%;
   padding-top: 12px;
@@ -16387,7 +16403,7 @@ const OrderItem$1 = newStyled.div`
 const OrderItemImage = newStyled.div`
   width: 112px;
   height: 112px;
-  background: no-repeat url(${({ $url }) => getImageUrl($url)});
+  background: no-repeat url(${({ $url }) => $url});
   background-size: cover;
   border-radius: 8px;
 `;
@@ -16411,7 +16427,7 @@ const OrderItemQuantity = newStyled.p`
 `;
 const OrderItem = ({ quantity, product }) => {
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(OrderItem$1, { children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsx(OrderItemImage, { $url: product.imageUrl }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(OrderItemImage, { $url: getImageUrl(product.imageUrl) }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs(OrderItemInfo, { children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx(OrderItemName, { children: product.name }),
       /* @__PURE__ */ jsxRuntimeExports.jsx(OrderItemPrice, { children: formatCurrency(product.price) }),
@@ -16694,7 +16710,7 @@ const App = () => {
 };
 async function enableMocking() {
   {
-    const { worker } = await __vitePreload(() => import("./browser-Czo9Be0l.js"), true ? [] : void 0);
+    const { worker } = await __vitePreload(() => import("./browser-9XkTsjnt.js"), true ? [] : void 0);
     return worker.start({
       serviceWorker: {
         url: `${window.location.origin}${CLIENT_BASE_PATH}mockServiceWorker.js`,
